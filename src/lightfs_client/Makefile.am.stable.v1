@@ -1,0 +1,6 @@
+
+ceph_lfs_SOURCES = lightfs_client/lightfs.cc
+ceph_lfs_LDADD = $(LIBRADOS) $(LIBRBD)
+ceph_lfs_CFLAGS = $(AM_CFLAGS)
+ceph_lfs_CXXFLAGS = $(AM_CXXFLAGS)
+bin_PROGRAMS += ceph-lfs #ceph light filesystem client

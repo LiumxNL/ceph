@@ -57,6 +57,11 @@ libcls_rgw_la_LIBADD = libjson_spirit.la $(PTHREAD_LIBS) $(EXTRALIBS)
 libcls_rgw_la_LDFLAGS = ${AM_LDFLAGS} -module -avoid-version -shared -export-symbols-regex '.*__cls_.*'
 radoslib_LTLIBRARIES += libcls_rgw.la
 
+libcls_lightfs_la_SOURCES = cls/lightfs/cls_lightfs.cc
+libcls_lightfs_la_LIBADD = $(PTHREAD_LIBS) $(EXTRALIBS)
+libcls_lightfs_la_LDFLAGS = ${AM_LDFLAGS} -module -avoid-version -shared -export-symbols-regex '.*__cls_.*'
+radoslib_LTLIBRARIES += libcls_lightfs.la
+
 ## Rados object client classes
 
 libcls_lock_client_la_SOURCES = \

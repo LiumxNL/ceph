@@ -144,6 +144,9 @@ extern int cls_current_subop_num(cls_method_context_t hctx);
 /* helpers */
 extern void cls_cxx_subop_version(cls_method_context_t hctx, string *s);
 
+/* watch notify */
+extern int cls_notify(cls_method_context_t hctx, bufferlist *inbl);
+
 /* These are also defined in rados.h and librados.h. Keep them in sync! */
 #define CEPH_OSD_TMAP_HDR 'h'
 #define CEPH_OSD_TMAP_SET 's'
