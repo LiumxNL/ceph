@@ -623,3 +623,16 @@ int cls_log(int level, const char *format, ...)
      size *= 2;
    }
 }
+
+int cls_notify(cls_method_context_t hctx, bufferlist *inbl)
+{
+  ReplicatedPG::OpContext **pctx = (ReplicatedPG::OpContext **)hctx;
+  vector<OSDOp> ops(1);
+  OSDOp& op = ops[0];
+
+  op.op.op = CEPH_OSD_OP_NOTIFY;
+  ops[0].indata = *inbl;
+
+  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+
+}
