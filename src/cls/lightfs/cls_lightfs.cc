@@ -35,8 +35,8 @@ CLS_NAME(lightfs);
 cls_handle_t h_class;
 
 cls_method_handle_t h_genino;
-cls_method_handle_t h_read_seq_omap;
-cls_method_handle_t h_write_seq_omap;
+cls_method_handle_t h_read_seq;
+cls_method_handle_t h_write_seq;
 
 cls_method_handle_t h_create_lightfs;
 cls_method_handle_t h_stat_inode;
@@ -51,6 +51,8 @@ cls_method_handle_t h_lightfs_notify;
 
 typedef long long unsigned inode_t;
 
+static int name_to_Nname();
+static int ino_to_Iino(); 
 
 int genino(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
@@ -85,9 +87,9 @@ int genino(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   return 0;
 }
 
-int read_seq_omap(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+int read_seq(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  CLS_LOG(10, "read_seq_omap");
+  CLS_LOG(10, "read_seq");
   int r = -1;
   bufferlist bl;
   r = cls_cxx_map_read_header(hctx, out);
@@ -98,9 +100,9 @@ int read_seq_omap(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   return 0;
 }
 
-int write_seq_omap(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+int write_seq(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  CLS_LOG(10, "write_seq_omap");
+  CLS_LOG(10, "write_seq");
   int r = -1;
   uint64_t next = 0;
   bufferlist::iterator p = in->begin();
@@ -112,7 +114,7 @@ int write_seq_omap(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   bufferlist mybl;
   r = cls_cxx_map_read_header(hctx, &mybl);
   if (r < 0) {
-    CLS_ERR("error omap read seq !!!");
+    CLS_ERR("error read seq !!!");
     return r;
   }  
   
@@ -138,7 +140,7 @@ int write_seq_omap(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   r = cls_cxx_map_write_header(hctx, &new_bl);
   CLS_LOG(10, "write next seq r = %d", r);
   if (r < 0) {
-    CLS_LOG(10, "error omap write next seq!!!");
+    CLS_LOG(10, "error write next seq!!!");
     return r;
   }
   return 0;
@@ -388,10 +390,12 @@ int add_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   ::decode(name, p);
   ::decode(ino, p);
 
+  string name_str("N.");
+  name_str.append(name);
   assert(ino != 0);
+  
 
-
-  int r = get_val(hctx, name, inode);
+  int r = get_val(hctx, name_str, inode);
   CLS_LOG(10, "get dir inode = %s", inode.c_str());
   /*
     2. dir_name not exists in parent ino object
@@ -404,10 +408,18 @@ int add_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
     int len_hex = snprintf(inode_hex, sizeof(inode_hex), format, ino);
     assert(len_hex < INO_BITS);
     CLS_LOG(10, "inode_hex = %s , strlen(inode_hex) = %lu, len_hex = %d", inode_hex, strlen(inode_hex), len_hex);
-    bufferlist bl;
-    bl.append(inode_hex, len_hex);
-    //set ino of dir 
-    cls_cxx_map_set_val(hctx, name, &bl);
+
+    bufferlist ino_bl;
+    ino_bl.append(inode_hex, len_hex);
+    //add <N.name, ino>
+    cls_cxx_map_set_val(hctx, name_str, &ino_bl);
+
+    bufferlist name_bl;
+    name_bl.append(name);
+    string ino_str("I.");
+    ino_str.append(inode_hex);   
+    // add <I.ino, name>
+    cls_cxx_map_set_val(hctx, ino_str, &name_bl);
   } else {
   /*
     3. dir_name exists in parent ino object
@@ -424,15 +436,42 @@ int remove_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   CLS_LOG(10, "lightfs remove_entry");
   int r = -1;
   string name;
-  string inode; 
+  string ino; 
   bufferlist::iterator p = in->begin();
   ::decode(name, p);
-  r = get_val(hctx, name, inode);
-  if (r < 0)
-    return 0;
 
-  r = cls_cxx_map_remove_key(hctx, name);
+  string name_str("N.");
+  name_str.append(name);
+
+  r = get_val(hctx, name, ino);
+  if (r < 0)
+    goto out;
+
+  string ino_str("I.");
+  ino_str.append(ino);
+  
+  // remove <N.name, ino> and <I.ino, name>
+  r = cls_cxx_map_remove_key(hctx, name_str);
+  if (r < 0)
+    goto out;
+  r = cls_cxx_map_remove_key(hctx, ino_str);
+
+out:
   return r;
+}
+
+int rename(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+{
+  CLS_LOG(10, "lightfs rename");
+  int r = -1;
+  string name;
+  string ino;
+  bufferlist::iterator p = in->begin();
+  ::decode(name, p);
+  ::decode(ino, p);
+  
+  
+  
 }
 
 int do_notify(cls_method_context_t hctx, bufferlist *inbl)
@@ -495,10 +534,10 @@ void __cls_init()
   cls_register("lightfs", &h_class);
   cls_register_cxx_method(h_class, "genino", 
 	CLS_METHOD_RD | CLS_METHOD_WR, genino, &h_genino);
-  cls_register_cxx_method(h_class, "read_seq_omap", 
-	CLS_METHOD_RD, read_seq_omap, &h_read_seq_omap);
-  cls_register_cxx_method(h_class, "write_seq_omap", 
-	CLS_METHOD_RD | CLS_METHOD_WR, write_seq_omap, &h_write_seq_omap);
+  cls_register_cxx_method(h_class, "read_seq", 
+	CLS_METHOD_RD, read_seq, &h_read_seq);
+  cls_register_cxx_method(h_class, "write_seq", 
+	CLS_METHOD_RD | CLS_METHOD_WR, write_seq, &h_write_seq);
 
   cls_register_cxx_method(h_class, "create_lightfs", 
 	CLS_METHOD_RD | CLS_METHOD_WR, create_lightfs, &h_create_lightfs);
@@ -509,10 +548,11 @@ void __cls_init()
   cls_register_cxx_method(h_class, "remove_inode", 
 	CLS_METHOD_RD | CLS_METHOD_WR, remove_inode, &h_remove_inode);
 
-  cls_register_cxx_method(h_class, "add_entry", 
+  cls_register_cxx_method(h_class, "link_inode", 
 	CLS_METHOD_RD | CLS_METHOD_WR, add_entry, &h_add_entry);
-  cls_register_cxx_method(h_class, "remove_entry", 
+  cls_register_cxx_method(h_class, "unlink_inode", 
 	CLS_METHOD_RD | CLS_METHOD_WR, remove_entry, &h_remove_entry);
+   
 /*
   cls_register_cxx_method(h_class, "lightfs_mkdir", 
 	CLS_METHOD_RD | CLS_METHOD_WR, lightfs_mkdir, &h_lightfs_mkdir);
