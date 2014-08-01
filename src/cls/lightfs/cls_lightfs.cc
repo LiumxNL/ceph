@@ -51,9 +51,6 @@ cls_method_handle_t h_lightfs_notify;
 
 typedef long long unsigned inode_t;
 
-static int name_to_Nname();
-static int ino_to_Iino(); 
-
 int genino(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
   int r = -1;
@@ -445,18 +442,16 @@ int remove_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 
   r = get_val(hctx, name, ino);
   if (r < 0)
-    goto out;
-
+    return r;
   string ino_str("I.");
   ino_str.append(ino);
   
   // remove <N.name, ino> and <I.ino, name>
   r = cls_cxx_map_remove_key(hctx, name_str);
   if (r < 0)
-    goto out;
+    return r;
   r = cls_cxx_map_remove_key(hctx, ino_str);
 
-out:
   return r;
 }
 
@@ -464,13 +459,26 @@ int rename(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
   CLS_LOG(10, "lightfs rename");
   int r = -1;
-  string name;
-  string ino;
+  string oldname;
+  string newname;
+  _inodeno_t ino;
   bufferlist::iterator p = in->begin();
-  ::decode(name, p);
+  ::decode(oldname, p);
+  ::decode(newname, p);
   ::decode(ino, p);
   
+  oldname.insert(0, "N."); 
+  newname.insert(0, "N."); 
   
+  string myino;
+  r = get_val(hctx, oldname, myino);
+  if (r < 0)
+    return r;
+  _inodeno_t num = strtoul(myino, NULL, 16);
+  if (ino != num) 
+    return -1;
+  
+  //remove_entry(hctx, );
   
 }
 
