@@ -105,6 +105,9 @@ DENCODER_DEPS += libcls_rgw_client.la
 libcls_rbd_client_la_SOURCES = cls/rbd/cls_rbd_client.cc
 noinst_LTLIBRARIES += libcls_rbd_client.la
 
+libcls_lightfs_client_la_SOURCES = cls/lightfs/cls_lightfs_client.cc
+noinst_LTLIBRARIES += libcls_lightfs_client.la
+
 libcls_user_client_a_SOURCES = cls/user/cls_user_client.cc \
 	cls/user/cls_user_types.cc \
 	cls/user/cls_user_ops.cc
@@ -118,6 +121,7 @@ noinst_HEADERS += \
 	cls/lock/cls_lock_client.h \
 	cls/rbd/cls_rbd.h \
 	cls/rbd/cls_rbd_client.h \
+	cls/lightfs/cls_lightfs_client.h \
 	cls/refcount/cls_refcount_ops.h \
 	cls/refcount/cls_refcount_client.h \
 	cls/version/cls_version_types.h \
