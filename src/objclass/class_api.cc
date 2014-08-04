@@ -548,6 +548,20 @@ int cls_cxx_map_remove_key(cls_method_context_t hctx, const string &key)
   return (*pctx)->pg->do_osd_ops(*pctx, ops);
 }
 
+int cls_cxx_map_remove_keys(cls_method_context_t hctx, const std::set<string> *set)
+{
+  ReplicatedPG::OpContext **pctx = (ReplicatedPG::OpContext **)hctx;
+  vector<OSDOp> ops(1);
+  OSDOp& op = ops[0];
+  bufferlist& update_bl = op.indata;
+
+  ::encode(*set, update_bl);
+
+  op.op.op = CEPH_OSD_OP_OMAPRMKEYS;
+
+  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+}
+
 int cls_gen_random_bytes(char *buf, int size)
 {
   return get_random_bytes(buf, size);

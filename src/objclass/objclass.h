@@ -131,6 +131,7 @@ extern int cls_cxx_map_set_vals(cls_method_context_t hctx,
                                 const std::map<string, bufferlist> *map);
 extern int cls_cxx_map_write_header(cls_method_context_t hctx, bufferlist *inbl);
 extern int cls_cxx_map_remove_key(cls_method_context_t hctx, const string &key);
+extern int cls_cxx_map_remove_keys(cls_method_context_t hctx, const std::set<string> *set);
 extern int cls_cxx_map_update(cls_method_context_t hctx, bufferlist *inbl);
 
 /* utility functions */
