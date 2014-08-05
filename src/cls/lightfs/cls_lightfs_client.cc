@@ -26,8 +26,9 @@ namespace lightfs {
       }
       return 0;
     }
+
     int write_seq(librados::IoCtx *ioctx, const std::string &oid, 
-	uint64_t next_ino);
+	uint64_t next_ino)
     {
       int r = -1;
       bufferlist inbl;
@@ -41,7 +42,7 @@ namespace lightfs {
     }
 
     int create_inode(librados::IoCtx *ioctx, const std::string &oid, 
-	uint64_t ino, mode_t mode);
+	uint64_t ino, mode_t mode)
     {
       int r = -1;
       bufferlist inbl;
@@ -56,7 +57,7 @@ namespace lightfs {
       return 0;
     }
 
-    int remove_inode(librados::IoCtx *ioctx, const std::string &oid);	
+    int remove_inode(librados::IoCtx *ioctx, const std::string &oid)
     {
       int r = -1;
       bufferlist inbl;
@@ -70,7 +71,7 @@ namespace lightfs {
     }
 
     int link_inode(librados::IoCtx *ioctx, const std::string &oid,
-	const std::string name, uint64_t ino);
+	const std::string &name, uint64_t ino)
     {
       int r = -1;
       bufferlist inbl;
@@ -86,7 +87,7 @@ namespace lightfs {
     }
 
     int unlink_inode(librados::IoCtx *ioctx, const std::string &oid,
-	uint64_t name);
+	const std::string &name)
     {
       int r = -1;
       bufferlist inbl;
@@ -99,5 +100,23 @@ namespace lightfs {
       }
       return 0;
     }
+  
+    int rename(librados::IoCtx *ioctx, const std::string &oid,
+        const std::string &oldname, const std::string &newname, uint64_t ino)
+    {
+      int r = -1;
+      bufferlist inbl;
+      bufferlist outbl;
+      ::encode(oldname, inbl);
+      ::encode(newname, inbl);
+      ::encode(ino, inbl);
+      r = ioctx->exec(oid, "lightfs", "rename", inbl, outbl);
+      if (r < 0) {
+	cout << "lightfs rename failed, r = " << r << endl;
+	return r;
+      }
+      return 0;
+    }
+
   }
 }

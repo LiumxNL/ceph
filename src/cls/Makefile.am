@@ -112,6 +112,14 @@ DENCODER_DEPS += libcls_user_client.a
 
 noinst_LIBRARIES += libcls_user_client.a
 
+test_cls_SOURCES = cls/lightfs/cls_lightfs_client.h \
+	cls/lightfs/cls_lightfs_client.cc \
+	cls/lightfs/test_cls.cc
+test_cls_LDADD = $(LIBRADOS)
+test_cls_CFLAGS = $(AM_FLAGS)
+test_cls_CXXFLAGS = $(AM_CXXFLAGS)
+bin_PROGRAMS += test_cls
+
 noinst_HEADERS += \
 	cls/lock/cls_lock_types.h \
 	cls/lock/cls_lock_ops.h \
@@ -137,5 +145,6 @@ noinst_HEADERS += \
 	cls/rgw/cls_rgw_types.h \
 	cls/user/cls_user_client.h \
 	cls/user/cls_user_ops.h \
-	cls/user/cls_user_types.h
+	cls/user/cls_user_types.h \
+	cls/lightfs/cls_lightfs_client.h
 

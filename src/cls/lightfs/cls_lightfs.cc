@@ -391,7 +391,6 @@ int add_entry(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   name_str.append(name);
   assert(ino != 0);
   
-
   int r = get_val(hctx, name_str, inode);
   CLS_LOG(10, "get dir inode = %s", inode.c_str());
   /*
@@ -474,12 +473,24 @@ int rename(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   r = get_val(hctx, oldname, myino);
   if (r < 0)
     return r;
-  _inodeno_t num = strtoul(myino, NULL, 16);
+  _inodeno_t num = strtoul(myino.c_str(), NULL, 16);
   if (ino != num) 
     return -1;
   
-  //remove_entry(hctx, );
+  bufferlist bl1;
+  ::encode(oldname, bl1);
+  r = remove_entry(hctx, &bl1, out);
+  if (r < 0)
+    return r;
   
+  bufferlist bl2;
+  ::encode(newname, bl2);
+  ::encode(num, bl2);
+  r = add_entry(hctx, &bl2, out);
+  if (r < 0)
+    return r;
+   
+  return 0; 
 }
 
 int do_notify(cls_method_context_t hctx, bufferlist *inbl)
