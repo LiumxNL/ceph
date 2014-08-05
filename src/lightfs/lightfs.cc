@@ -5,9 +5,12 @@
 
 #include "lightfs.hpp"
 #include "cls/lightfs/cls_lightfs_client.h"
+#include "include/lightfs_types.hpp"
 #include <assert.h>
 #include <stdlib.h>
 #include <time.h>
+
+using namespace lightfs::cls_client;
 
 #define MAX_RETURN 65535
 
@@ -161,7 +164,7 @@ namespace lightfs {
     r = lctx->ioctx.exec(ioid_obj, "lightfs", "create_inode", inbl, outbl);
     cout << "lightfs create_inode r = " << r << endl;
 */
-    lightfs::cls_client::create_inode(lctx, ioid_obj, ino, mode)
+    lightfs::cls_client::create_inode(&lctx->ioctx, ioid_obj, ino, mode);
   
     //2. add inode to parent childlist
 /*
@@ -172,7 +175,7 @@ namespace lightfs {
     r = lctx->ioctx.exec(poid_obj, "lightfs", "link_inode", new_inbl, new_outbl);
     cout << "lightfs exec add_entry r = " << r << endl;
 */
-    lightfs::cls_client::link_inode(lctx, poid_obj, name_str, ino);
+    lightfs::cls_client::link_inode(&lctx->ioctx, poid_obj, name_str, ino);
   
     //3. delete inode if it already existed in parent childlist
     if (r == -EEXIST) {
@@ -185,7 +188,7 @@ namespace lightfs {
         return r;
       }
 */
-      lightfs::cls_client::remove_inode(lctx, ioid_obj);
+      lightfs::cls_client::remove_inode(&lctx->ioctx, ioid_obj);
     }
     
     // 4. write to cache ...
@@ -193,7 +196,7 @@ namespace lightfs {
     return 0;
   }
   
-  int Lightfs::readdir(_inodeno_t myino, size_t size, std::<std::string, bufferlist> &out_vals)
+  int Lightfs::readdir(_inodeno_t myino, size_t size, std::map<std::string, bufferlist> &out_vals)
   {
     int r = -1;
     int rval = -1;
@@ -316,7 +319,7 @@ namespace lightfs {
       cout << endl;
     }
 */
-    lightfs::cls_client::remove_inode(lctx, myoid);
+    lightfs::cls_client::remove_inode(&lctx->ioctx, myoid);
     return 0;
   }
   
@@ -328,8 +331,9 @@ namespace lightfs {
     int r = -1; 
     int rval = -1;
     oid_t myparent(LIGHTFS_OBJ_INO, pino);
-    string parent_obj(parent->id);
-    r = lightfs::cls_client::unlink_inode(lctx, parent_obj, name);
+    string parent_obj(myparent.id);
+    //r = lightfs::cls_client::unlink_inode(&lctx->ioctx, parent_obj, name);
+    r = unlink_inode(&lctx->ioctx, parent_obj, name);
     
     return r ; 
   }

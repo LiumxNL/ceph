@@ -95,8 +95,7 @@ int main(int argc, char *argv[])
 	  cout << "mkdir" << endl;
 	  cout << "ino = " << hex << ino << dec << " name = " << name << endl;
 	  //pino= 0x8000000000000000;
-  	  lightfs_inode_t parent(pino, S_IFDIR);
-	  r = lfs.mkdir(&parent, name, S_IFDIR);
+	  r = lfs.mkdir(pino, name, S_IFDIR);
 	  break;
 	}
 
@@ -105,17 +104,16 @@ int main(int argc, char *argv[])
 	  cout << "readdir" << endl;
 	  cout << "ino = " << hex << ino << dec << endl;
   	  //ino = 0x8000000000000000;
-  	  lightfs_inode_t myself(ino, S_IFDIR);
-	  r = lfs.readdir(&myself, NULL, 0);
+	  std::map<std::string, bufferlist> subs;
+	  r = lfs.readdir(ino, 255, subs);
 	  break;
 	}
   case LIGHTFS_LOOKUP:
 	{
 	  cout << "lookup" << endl;
 	  cout << "pino = " << hex << pino << dec << endl;
-  	  lightfs_inode_t parent(pino, S_IFDIR);
-	  lightfs_inode_t target(-1, S_IFDIR);
-	  r = lfs.lookup(&parent, name, &target);
+	  _inodeno_t target = -1;
+	  r = lfs.lookup(pino, name, &target);
 	  break;
 	}
   case LIGHTFS_RMDIR:
@@ -123,8 +121,7 @@ int main(int argc, char *argv[])
 	  cout << "rmdir" << endl;
 	  cout << "pino = " << hex << pino << dec << endl;
  	  cout << "dir = " << name << endl;
-  	  lightfs_inode_t parent(pino, S_IFDIR);
-	  r = lfs.rmdir(&parent, name);
+	  r = lfs.rmdir(pino, name);
 	  break;
 	}
   case LIGHTFS_RM:

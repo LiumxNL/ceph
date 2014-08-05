@@ -116,7 +116,7 @@ namespace lightfs {
     /* inode ops */
     int mkdir(_inodeno_t pino, const char *name, mode_t mode);
 
-    int readdir(_inodeno_t myino, size_t size, std::<std::string, bufferlist> &out_vals);
+    int readdir(_inodeno_t myino, size_t count, std::map<std::string, bufferlist> &out_vals);
     int lookup(_inodeno_t pino, const char *name, _inodeno_t *ino);
     int do_rmdir(_inodeno_t myino);
     int rmdir(_inodeno_t pino, const char *name);
@@ -198,6 +198,7 @@ namespace lightfs {
   };
 
   class Log {
+/*
   private:
     // pair <pino, ino>
     std::deque <std::pair<uint64_t, uint64_t> *> log_queue;
@@ -205,7 +206,7 @@ namespace lightfs {
   public:
     LightfsCtx *lctx;
 
-    Log(LightfsCtx *ctx, uint32_t bits) : log_queue<std::pair<uint64_t, uint64_t> *>(), log_bits(bits), lctx(ctx) {}
+    Log(LightfsCtx *ctx, uint32_t bits) : log_queue<std::pair<uint64_t, uint64_t> *>(0), log_bits(bits), lctx(ctx) {}
     ~Log() {}
     int init_log();
     int loop()
@@ -229,6 +230,7 @@ namespace lightfs {
       log_queue.push_back(entry);
       printf("size = %d, max_size = %d\n", log_queue.size(), log_queue.max_size());
     }
+*/
   };
 }
 #endif
