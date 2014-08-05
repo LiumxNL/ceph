@@ -38,12 +38,11 @@ namespace lightfs
       return -EINVAL;
 
     int r;
-    uint64_t max = (1 << (64 - bits)) - 1;
     for (int i = 0; i < (1 << bits); ++i) {
       string oid;
       get_oid(i, oid);
 
-      r = cls_client::create_seq(&_ioctx, oid, max);
+      r = cls_client::create_seq(&_ioctx, oid);
       if (r < 0)
         return r;
     }
@@ -85,6 +84,7 @@ namespace lightfs
       }
     }
 
+    uint64_t max = (1 << (64 - _bits));
     while (true) {
       int index = rand() & ((1 << _bits) - 1);
       string oid;
@@ -93,6 +93,9 @@ namespace lightfs
       r = cls_client::read_seq(&_ioctx, oid, ino);
       if (r < 0)
         return r;
+
+      if (ino == max)
+        continue;
 
       r = cls_client::write_seq(&_ioctx, oid, ino);
       if (r < 0) {

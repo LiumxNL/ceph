@@ -23,14 +23,6 @@ namespace lightfs
     CLS_LOG(20, "lightfs create_seq");
     int r;
 
-    uint64_t max;
-    try {
-      bufferlist::iterator p = in->begin();
-      ::decode(max, p);
-    } catch (const buffer::error &err) {
-      return -EINVAL;
-    }
-
     r = cls_cxx_create(hctx, false);
     if (r < 0)
       return r;
@@ -38,7 +30,6 @@ namespace lightfs
     bufferlist data;
     uint64_t now = 0;
     ::encode(now, data);
-    ::encode(max, data);
     r = cls_cxx_map_write_header(hctx, &data);
     if (r < 0)
       return r;
@@ -57,11 +48,9 @@ namespace lightfs
       return r;
 
     uint64_t now;
-    uint64_t max;
     try {
       bufferlist::iterator p = bl.begin();
       ::decode(now, p);
-      ::decode(max, p);
     } catch (const buffer::error &err) {
       assert(false);
       return -ERANGE;
@@ -92,11 +81,10 @@ namespace lightfs
     if (r < 0)
       return r;
   
-    uint64_t now, max;
+    uint64_t now;
     try {
       bufferlist::iterator p = data.begin();
       ::decode(now, p);
-      ::decode(max, p);
     } catch (const buffer::error &err) {
       assert(false);
       return -ERANGE;
@@ -105,13 +93,11 @@ namespace lightfs
     if (hope != now)
       return -EAGAIN;
 
-    if (now == max)
+    if (++now == 0)
       return -ERANGE;
 
-    ++now;
     bufferlist newdata;
     ::encode(now, newdata);
-    ::encode(max, newdata);
     r = cls_cxx_map_write_header(hctx, &newdata);
     if (r < 0)
       return r;
