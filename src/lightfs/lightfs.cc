@@ -101,6 +101,7 @@ namespace lightfs
         return r;
       }
 
+      ino |= index << (64 - _bits);
       return 0;
     }
   }
