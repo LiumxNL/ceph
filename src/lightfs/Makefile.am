@@ -8,8 +8,8 @@ noinst_LTLIBRARIES += liblightfs.la
 noinst_HEADERS += \
 	lightfs/lightfs.hpp
 
-lightfs_test_SOURCES = lightfs/test_lfs.cc
-lightfs_test_LDADD = liblightfs.la
-bin_DEBUGPROGRAMS += lightfs_test
+lightfs_test_cls_SOURCES = lightfs/test_cls.cc
+lightfs_test_cls_LDADD = liblightfs.la
+bin_DEBUGPROGRAMS += lightfs_test_cls
 
 endif
