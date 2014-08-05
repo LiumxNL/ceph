@@ -20,6 +20,11 @@ namespace lightfs {
         bool excl, const inode_t &inode);
     int remove_inode(librados::IoCtx *ioctx, const std::string &oid);
 
+    int get_inode(librados::IoCtx *ioctx, const std::string &oid,
+        inode_t &inode, int used_attr = ATTR_ALL);
+    int update_inode(librados::IoCtx *ioctx, const std::string &oid,
+        int used_attr, const inode_t &inode);
+
     int link_inode(librados::IoCtx *ioctx, const std::string &oid,
         const std::string &name, inodeno_t ino);
     int unlink_inode(librados::IoCtx *ioctx, const std::string &oid,

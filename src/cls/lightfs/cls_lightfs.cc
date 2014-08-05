@@ -178,6 +178,79 @@ namespace lightfs
     return 0;
   }
 
+  static int get_inode(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+  {
+    CLS_LOG(20, "lightfs remove_inode");
+
+    int r;
+
+    int used_attr;
+    try {
+      bufferlist::iterator p = in->begin();
+      ::decode(used_attr, p);
+    } catch (const buffer::error &err) {
+      return -EINVAL;
+    }
+
+    bufferlist data;
+    r = cls_cxx_map_read_header(hctx, &data);
+    if (r < 0)
+      return r;
+
+    inode_t inode;
+    try {
+      bufferlist::iterator p = data.begin();
+      inode.decode(p);
+    } catch (const buffer::error &err) {
+      assert(0);
+      return -EIO;
+    }
+
+    bufferlist res;
+    inode.encode(used_attr, res);
+    out->claim(res);
+
+    return 0;
+  }
+
+  static int update_inode(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+  {
+    CLS_LOG(20, "lightfs remove_inode");
+
+    int r;
+
+    bufferlist data;
+    r = cls_cxx_map_read_header(hctx, &data);
+    if (r < 0)
+      return r;
+
+    inode_t inode;
+    try {
+      bufferlist::iterator p = data.begin();
+      inode.decode(p);
+    } catch (const buffer::error &err) {
+      assert(0);
+      return -EIO;
+    }
+
+    int used_attr;
+    try {
+      bufferlist::iterator p = in->begin();
+      ::decode(used_attr, p);
+      inode.decode(used_attr, p);
+    } catch (const buffer::error &err) {
+      return -EINVAL;
+    }
+
+    bufferlist newdata;
+    inode.encode(newdata);
+    r = cls_cxx_map_write_header(hctx, &newdata);
+    if (r < 0)
+      return r;
+
+    return 0;
+  }
+
   static inline void get_name_key(const string& name, string &result)
   {
     result = "N." + name;
@@ -393,6 +466,8 @@ cls_method_handle_t h_write_seq;
 
 cls_method_handle_t h_create_inode;
 cls_method_handle_t h_remove_inode;
+cls_method_handle_t h_get_inode;
+cls_method_handle_t h_update_inode;
 cls_method_handle_t h_link_inode;
 cls_method_handle_t h_unlink_inode;
 cls_method_handle_t h_rename_inode;
@@ -412,6 +487,12 @@ void __cls_init()
 	CLS_METHOD_RD | CLS_METHOD_WR, lightfs::create_inode, &h_create_inode);
   cls_register_cxx_method(h_class, "remove_inode", 
 	CLS_METHOD_RD | CLS_METHOD_WR, lightfs::remove_inode, &h_remove_inode);
+
+  cls_register_cxx_method(h_class, "get_inode",
+	CLS_METHOD_RD, lightfs::get_inode, &h_get_inode);
+  cls_register_cxx_method(h_class, "update_inode",
+	CLS_METHOD_RD | CLS_METHOD_WR, lightfs::update_inode, &h_update_inode);
+
   cls_register_cxx_method(h_class, "link_inode", 
 	CLS_METHOD_RD | CLS_METHOD_WR, lightfs::link_inode, &h_link_inode);
   cls_register_cxx_method(h_class, "unlink_inode", 

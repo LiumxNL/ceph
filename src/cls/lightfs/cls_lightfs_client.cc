@@ -55,12 +55,47 @@ namespace lightfs {
       return ioctx->exec(oid, "lightfs", "remove_inode", inbl, outbl);
     }
 
+    int get_inode(librados::IoCtx *ioctx, const std::string &oid, 
+        inode_t &inode, int used_attr)
+    {
+      int r;
+
+      bufferlist inbl;
+      bufferlist outbl;
+
+      ::encode(used_attr, inbl);
+      r = ioctx->exec(oid, "lightfs", "get_inode", inbl, outbl);
+      if (r < 0)
+        return r;
+
+      try {
+        bufferlist::iterator p = outbl.begin();
+        inode.decode(used_attr, p);
+      } catch (const buffer::error &err) {
+        assert(0);
+        return -EIO;
+      }
+
+      return 0;
+    }
+
+    int update_inode(librados::IoCtx *ioctx, const std::string &oid, 
+        int used_attr, const inode_t &inode)
+    {
+      bufferlist inbl;
+      bufferlist outbl;
+
+      ::encode(used_attr, inbl);
+      inode.encode(used_attr, inbl);
+      return ioctx->exec(oid, "lightfs", "update_inode", inbl, outbl);
+    }
+
     int link_inode(librados::IoCtx *ioctx, const std::string &oid,
         const std::string &name, inodeno_t ino)
     {
       bufferlist inbl;
       bufferlist outbl;
-      
+
       ::encode(name, inbl);
       ::encode(ino, inbl);
       return ioctx->exec(oid, "lightfs", "link_inode", inbl, outbl);
@@ -71,7 +106,7 @@ namespace lightfs {
     {
       bufferlist inbl;
       bufferlist outbl;
-      
+
       ::encode(name, inbl);
       ::encode(ino, inbl);
       return ioctx->exec(oid, "lightfs", "unlink_inode", inbl, outbl);
@@ -82,7 +117,7 @@ namespace lightfs {
     {
       bufferlist inbl;
       bufferlist outbl;
-      
+
       ::encode(oldname, inbl);
       ::encode(newname, inbl);
       ::encode(ino, inbl);
