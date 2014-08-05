@@ -145,6 +145,7 @@ LIBOSD_TYPES = libosd_types.la
 LIBOSDC = libosdc.la
 LIBMON = libmon.la
 LIBMON_TYPES = libmon_types.la
+LIBLIGHTFS = liblightfs.la
 LIBMDS = libmds.la
 LIBCLIENT = libclient.la
 LIBCLIENT_FUSE = libclient_fuse.la

@@ -1,12 +1,15 @@
+if WITH_FUSE
+liblightfs_la_SOURCES = \
+	lightfs/lightfs.cc
 
-lfs_SOURCES = \
-	lightfs/lightfs.cc \
-	lightfs/test_lfs.cc
-	
-lfs_LDADD = $(LIBRADOS) 
-lfs_CFLAGS = $(AM_CFLAGS)
-lfs_CXXFLAGS = $(AM_CXXFLAGS)
-bin_PROGRAMS += lfs #ceph light filesystem client
+liblightfs_la_LIBADD = $(LIBRADOS) libcls_lightfs_client.la -lfuse
+noinst_LTLIBRARIES += liblightfs.la
 
-include_HEADERS = \
+noinst_HEADERS += \
 	lightfs/lightfs.hpp
+
+lightfs_test_SOURCES = lightfs/test_lfs.cc
+lightfs_test_LDADD = liblightfs.la
+bin_DEBUGPROGRAMS += lightfs_test
+
+endif

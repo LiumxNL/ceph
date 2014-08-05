@@ -32,7 +32,7 @@ include cls/Makefile.am
 include key_value_store/Makefile.am
 include test/Makefile.am
 include tools/Makefile.am
-
+include lightfs/Makefile.am
 
 # core daemons
 
@@ -86,7 +86,7 @@ endif #LINUX
 
 if WITH_FUSE
 lfs_fuse_SOURCES = lfs_fuse.cc
-lfs_fuse_LDADD = $(LIBCLIENT_FUSE) $(CEPH_GLOBAL)
+lfs_fuse_LDADD = $(LIBLIGHTFS) $(CEPH_GLOBAL)
 bin_PROGRAMS += lfs-fuse
 
 ceph_fuse_SOURCES = ceph_fuse.cc
