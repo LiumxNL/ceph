@@ -77,6 +77,7 @@ Makefile
 /unittest_*
 /get_command_descriptions
 /lfs-fuse
+/lightfs_test_*
 
 # old dir, may in use by older branches
 /leveldb
