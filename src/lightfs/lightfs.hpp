@@ -16,6 +16,7 @@ namespace lightfs
     void get_oid(int index, string &oid);
   public:
     InoGenerator(const librados::IoCtx& ioctx);
+    ~InoGenerator();
     int init_pool(int bits);
     int generate(inodeno_t &ino);
   };

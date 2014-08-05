@@ -11,9 +11,15 @@ using namespace librados;
 namespace lightfs
 {
   InoGenerator::InoGenerator(const IoCtx &ioctx)
-    :_ioctx(ioctx)
-    ,_bits(0)
-  {}
+    :_bits(0)
+  {
+    _ioctx.dup(ioctx);
+  }
+
+  InoGenerator::~InoGenerator()
+  {
+    _ioctx.close();
+  }
 
   void InoGenerator::get_oid(int index, string &oid)
   {
