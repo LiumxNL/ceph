@@ -85,6 +85,10 @@ endif #LINUX
 # Fuse targets
 
 if WITH_FUSE
+lfs_fuse_SOURCES = lfs_fuse.cc
+lfs_fuse_LDADD = $(LIBCLIENT_FUSE) $(CEPH_GLOBAL)
+bin_PROGRAMS += lfs-fuse
+
 ceph_fuse_SOURCES = ceph_fuse.cc
 ceph_fuse_LDADD = $(LIBCLIENT_FUSE) $(CEPH_GLOBAL)
 bin_PROGRAMS += ceph-fuse
