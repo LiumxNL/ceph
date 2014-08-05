@@ -18,6 +18,34 @@ using namespace std;
 
 namespace lightfs
 {
+  static int create_seq(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+  {
+    CLS_LOG(20, "lightfs create_seq");
+    int r;
+
+    uint64_t max;
+    try {
+      bufferlist::iterator p = in->begin();
+      ::decode(max, p);
+    } catch (const buffer::error &err) {
+      return -EINVAL;
+    }
+
+    r = cls_cxx_create(hctx, false);
+    if (r < 0)
+      return r;
+
+    bufferlist data;
+    uint64_t now = 0;
+    ::encode(now, data);
+    ::encode(max, data);
+    r = cls_cxx_map_write_header(hctx, &data);
+    if (r < 0)
+      return r;
+
+    return 0;
+  }
+
   static int read_seq(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   {
     CLS_LOG(20, "lightfs read_seq");
@@ -461,6 +489,7 @@ CLS_NAME(lightfs);
 
 cls_handle_t h_class;
 
+cls_method_handle_t h_create_seq;
 cls_method_handle_t h_read_seq;
 cls_method_handle_t h_write_seq;
 
@@ -478,6 +507,8 @@ void __cls_init()
   
   cls_register("lightfs", &h_class);
 
+  cls_register_cxx_method(h_class, "create_seq",
+	CLS_METHOD_RD | CLS_METHOD_WR, lightfs::create_seq, &h_create_seq);
   cls_register_cxx_method(h_class, "read_seq", 
 	CLS_METHOD_RD, lightfs::read_seq, &h_read_seq);
   cls_register_cxx_method(h_class, "write_seq", 
