@@ -91,7 +91,7 @@ namespace lightfs
     }
 
     if (hope != now)
-      return -EAGAIN;
+      return -ENOEXEC;
 
     if (++now == 0)
       return -ERANGE;
