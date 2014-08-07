@@ -12,7 +12,7 @@ namespace lightfs {
     }
 
     int read_seq(librados::IoCtx *ioctx, const std::string &oid, 
-        uint64_t &ino)
+        uint64_t &seq)
     {
       int r;
 
@@ -25,7 +25,7 @@ namespace lightfs {
 
       try {
         bufferlist::iterator p = outbl.begin();
-        ::decode(ino, p);
+        ::decode(seq, p);
       } catch (const buffer::error &err) {
         assert(0);
         return -EIO;
