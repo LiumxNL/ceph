@@ -63,10 +63,7 @@ namespace lightfs
       return -ERANGE;
     }
 
-    bufferlist res;
-    ::encode(now, res);
-    out->claim(res);
-
+    ::encode(now, *out);
     return 0;
   }
 
