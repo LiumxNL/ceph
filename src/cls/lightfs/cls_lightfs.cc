@@ -468,6 +468,21 @@ namespace lightfs
 
     return 0;
   }
+
+  static int check_link_inode(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+  {
+    CLS_LOG(20, "lightfs check_link_inode");
+
+    inodeno_t ino;
+    try {
+      bufferlist::iterator p = in->begin();
+      ::decode(ino, p);
+    } catch (const buffer::error &err) {
+      return -EINVAL;
+    }
+
+    return is_inode_exist(hctx, ino);
+  }
 }
 
 CLS_VER(2,0);
@@ -486,6 +501,7 @@ cls_method_handle_t h_update_inode;
 cls_method_handle_t h_link_inode;
 cls_method_handle_t h_unlink_inode;
 cls_method_handle_t h_rename_inode;
+cls_method_handle_t h_check_link_inode;
 
 void __cls_init()
 {
@@ -516,6 +532,8 @@ void __cls_init()
 	CLS_METHOD_RD | CLS_METHOD_WR, lightfs::unlink_inode, &h_unlink_inode);
   cls_register_cxx_method(h_class, "rename_inode", 
 	CLS_METHOD_RD | CLS_METHOD_WR, lightfs::rename_inode, &h_rename_inode);
+  cls_register_cxx_method(h_class, "check_link_inode",
+	CLS_METHOD_RD, lightfs::check_link_inode, &h_check_link_inode);
 
   return;
 }

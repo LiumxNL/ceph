@@ -131,5 +131,15 @@ namespace lightfs {
       ::encode(ino, inbl);
       return ioctx->exec(oid, "lightfs", "rename_inode", inbl, outbl);
     }
+
+    int check_link_inode(librados::IoCtx *ioctx, const std::string &oid,
+        inodeno_t ino)
+    {
+      bufferlist inbl;
+      bufferlist outbl;
+
+      ::encode(ino, inbl);
+      return ioctx->exec(oid, "lightfs", "check_link_inode", inbl, outbl);
+    }
   }
 }
