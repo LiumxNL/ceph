@@ -194,7 +194,7 @@ namespace lightfs
 
   static int get_inode(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   {
-    CLS_LOG(20, "lightfs remove_inode");
+    CLS_LOG(20, "lightfs get_inode");
 
     int r;
 
@@ -229,7 +229,7 @@ namespace lightfs
 
   static int update_inode(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   {
-    CLS_LOG(20, "lightfs remove_inode");
+    CLS_LOG(20, "lightfs update_inode");
 
     int r;
 
