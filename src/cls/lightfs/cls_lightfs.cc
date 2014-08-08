@@ -112,6 +112,40 @@ namespace lightfs
     return 0;
   }
 
+
+  static int get_subinode_count(cls_method_context_t hctx, uint64_t &result)
+  {
+    int r;
+
+    bufferlist data;
+    r = cls_cxx_map_get_val(hctx, "C", &data);
+    if (r < 0)
+      return r;
+
+    try {
+      bufferlist::iterator p = data.begin();
+      ::decode(result, p);
+    } catch (const buffer::error &err) {
+      assert(0);
+      return -EIO;
+    }
+
+    return 0;
+  }
+
+  static int set_subinode_count(cls_method_context_t hctx, uint64_t count)
+  {
+    int r;
+
+    bufferlist data;
+    ::encode(count, data);
+    r = cls_cxx_map_set_val(hctx, "C", &data);
+    if (r < 0)
+      return r;
+
+    return 0;
+  }
+
   static int create_inode(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   {
     CLS_LOG(20, "lightfs create_inode");
@@ -138,40 +172,7 @@ namespace lightfs
     if (r < 0)
       return r;
 
-    return 0;
-  }
-
-  static int get_subinode_count(cls_method_context_t hctx, uint64_t &result)
-  {
-    int r;
-
-    bufferlist data;
-    r = cls_cxx_map_get_val(hctx, "C", &data);
-    if (r < 0) {
-      if (r == -ENOENT)
-        return 0;
-      else
-        return r;
-    }
-
-    try {
-      bufferlist::iterator p = data.begin();
-      ::decode(result, p);
-    } catch (const buffer::error &err) {
-      assert(0);
-      return -EIO;
-    }
-
-    return 0;
-  }
-
-  static int set_subinode_count(cls_method_context_t hctx, uint64_t count)
-  {
-    int r;
-
-    bufferlist data;
-    ::encode(count, data);
-    r = cls_cxx_map_set_val(hctx, "C", &data);
+    r = set_subinode_count(hctx, 0);
     if (r < 0)
       return r;
 
