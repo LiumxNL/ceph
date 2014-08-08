@@ -99,7 +99,7 @@ namespace lightfs
 
       r = cls_client::write_seq(&_ioctx, oid, ino);
       if (r < 0) {
-        if (r == -ERANGE || r == -EAGAIN)
+        if (r == -ERANGE || r == -ENOEXEC)
           continue;
         return r;
       }
