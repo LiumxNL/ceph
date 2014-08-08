@@ -57,8 +57,6 @@ namespace lightfs
 
     void encode(int used_attr, bufferlist &bl) const
     {
-      ENCODE_START(1, 1, bl);
-
       if (used_attr & ATTR_CTIME)
         ::encode(ctime, bl);
       if (used_attr & ATTR_ATIME)
@@ -79,8 +77,6 @@ namespace lightfs
         ::encode(uid, bl);
       if (used_attr & ATTR_GID)
         ::encode(gid, bl);
-
-      ENCODE_FINISH(bl);
     }
 
     void encode(bufferlist &bl) const
@@ -90,8 +86,6 @@ namespace lightfs
 
     void decode(int used_attr, bufferlist::iterator &p)
     {
-      DECODE_START(1, p);
-
       if (used_attr & ATTR_CTIME)
         ::decode(ctime, p);
       if (used_attr & ATTR_ATIME)
@@ -112,8 +106,6 @@ namespace lightfs
         ::decode(uid, p);
       if (used_attr & ATTR_GID)
         ::decode(gid, p);
-
-      DECODE_FINISH(p);
     }
 
     void decode(bufferlist::iterator &p)
