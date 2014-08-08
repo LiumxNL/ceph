@@ -23,13 +23,20 @@ namespace lightfs
     CLS_LOG(20, "lightfs create_seq");
     int r;
 
+    uint64_t init_seq;
+    try {
+      bufferlist::iterator p = in->begin();
+      ::decode(init_seq, p);
+    } catch (const buffer::error &err) {
+      return -EINVAL;
+    }
+
     r = cls_cxx_create(hctx, false);
     if (r < 0)
       return r;
 
     bufferlist data;
-    uint64_t now = 0;
-    ::encode(now, data);
+    ::encode(init_seq, data);
     r = cls_cxx_map_write_header(hctx, &data);
     if (r < 0)
       return r;

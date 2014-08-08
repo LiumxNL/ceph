@@ -3,11 +3,13 @@
 namespace lightfs {
   namespace cls_client {
 
-    int create_seq(librados::IoCtx *ioctx, const std::string &oid)
+    int create_seq(librados::IoCtx *ioctx, const std::string &oid,
+        uint64_t init_seq)
     {
       bufferlist inbl;
       bufferlist outbl;
 
+      ::encode(init_seq, inbl);
       return ioctx->exec(oid, "lightfs", "create_seq", inbl, outbl);
     }
 

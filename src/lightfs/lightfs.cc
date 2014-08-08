@@ -42,7 +42,7 @@ namespace lightfs
       string oid;
       get_oid(i, oid);
 
-      r = cls_client::create_seq(&ioctx, oid);
+      r = cls_client::create_seq(&ioctx, oid, i ? 0 : 1);
       if (r < 0)
         return r;
     }
