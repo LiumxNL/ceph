@@ -488,6 +488,66 @@ namespace lightfs
 
     return is_inode_exist(hctx, ino);
   }
+
+  static int find_inode(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+  {
+    CLS_LOG(20, "lightfs find_inode");
+
+    string name;
+    try {
+      bufferlist::iterator p = in->begin();
+      ::decode(name, p);
+    } catch (const buffer::error &err) {
+      return -EINVAL;
+    }
+
+    string key;
+    get_name_key(name, key);
+    return cls_cxx_map_get_val(hctx, key, out);
+  }
+
+  static int list_inode(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+  {
+    CLS_LOG(20, "lightfs list_inode");
+
+    string start;
+    uint64_t max;
+    try {
+      bufferlist::iterator p = in->begin();
+      ::decode(start, p);
+      ::decode(max, p);
+    } catch (const buffer::error &err) {
+      return -EINVAL;
+    }
+
+    string start_obj;
+    string filter_prefix;
+    get_name_key(start, start_obj);
+    get_name_key("", filter_prefix);
+    map<string, bufferlist> vals;
+    int r = cls_cxx_map_get_vals(hctx, start_obj, filter_prefix, max, &vals);
+    if (r < 0)
+      return r;
+
+    map<string, inodeno_t> result;
+    for (map<string, bufferlist>::iterator pos = vals.begin();
+         pos != vals.end();
+         ++pos)
+    {
+      try
+      {
+        inodeno_t ino;
+        bufferlist::iterator p = pos->second.begin();
+        ::decode(ino, p);
+        result[pos->first] = ino;
+      } catch (const buffer::error &err) {
+        return -EIO;
+      }
+    }
+    ::encode(result, *out);
+
+    return 0;
+  }
 }
 
 CLS_VER(2,0);
@@ -507,6 +567,8 @@ cls_method_handle_t h_link_inode;
 cls_method_handle_t h_unlink_inode;
 cls_method_handle_t h_rename_inode;
 cls_method_handle_t h_check_link_inode;
+cls_method_handle_t h_find_inode;
+cls_method_handle_t h_list_inode;
 
 void __cls_init()
 {
@@ -539,6 +601,11 @@ void __cls_init()
 	CLS_METHOD_RD | CLS_METHOD_WR, lightfs::rename_inode, &h_rename_inode);
   cls_register_cxx_method(h_class, "check_link_inode",
 	CLS_METHOD_RD, lightfs::check_link_inode, &h_check_link_inode);
+
+  cls_register_cxx_method(h_class, "find_inode",
+	CLS_METHOD_RD, lightfs::find_inode, &h_find_inode);
+  cls_register_cxx_method(h_class, "list_inode",
+	CLS_METHOD_RD, lightfs::list_inode, &h_list_inode);
 
   return;
 }

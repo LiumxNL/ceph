@@ -143,5 +143,55 @@ namespace lightfs {
       ::encode(ino, inbl);
       return ioctx->exec(oid, "lightfs", "check_link_inode", inbl, outbl);
     }
+
+    int find_inode(librados::IoCtx *ioctx, const std::string &oid,
+        const std::string &name, inodeno_t &ino)
+    {
+      int r;
+
+      bufferlist inbl;
+      bufferlist outbl;
+
+      ::encode(name, inbl);
+      r = ioctx->exec(oid, "lightfs", "find_inode", inbl, outbl);
+      if (r < 0)
+        return r;
+
+      try {
+        bufferlist::iterator p = outbl.begin();
+        ::decode(ino, p);
+      } catch (const buffer::error &err) {
+        assert(0);
+        return -EIO;
+      }
+
+      return 0;
+    }
+
+    int list_inode(librados::IoCtx *ioctx, const std::string &oid,
+        const std::string &start_after, uint64_t max_return,
+        std::map<std::string, inodeno_t> *result)
+    {
+      int r;
+
+      bufferlist inbl;
+      bufferlist outbl;
+
+      ::encode(start_after, inbl);
+      ::encode(max_return, inbl);
+      r = ioctx->exec(oid, "lightfs", "list_inode", inbl, outbl);
+      if (r < 0)
+        return r;
+
+      try {
+        bufferlist::iterator p = outbl.begin();
+        ::decode(*result, p);
+      } catch (const buffer::error &err) {
+        assert(0);
+        return -EIO;
+      }
+
+      return 0;
+    }
   }
 }

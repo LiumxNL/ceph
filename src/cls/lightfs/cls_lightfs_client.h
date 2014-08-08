@@ -35,6 +35,12 @@ namespace lightfs {
         const std::string &oldname, const std::string &newname, inodeno_t ino);
     int check_link_inode(librados::IoCtx *ioctx, const std::string &oid,
         inodeno_t ino);
+
+    int find_inode(librados::IoCtx *ioctx, const std::string &oid,
+        const std::string &name, inodeno_t &ino);
+    int list_inode(librados::IoCtx *ioctx, const std::string &oid,
+        const std::string &start_after, uint64_t max_return,
+        std::map<std::string, inodeno_t> *result);
   }
 }
 
