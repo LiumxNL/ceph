@@ -17,7 +17,7 @@ namespace lightfs
   public:
     InoGenerator(const librados::IoCtx& ioctx);
     ~InoGenerator();
-    int init_pool(int bits);
+    static int init_pool(librados::IoCtx& ioctx, int bits);
     int generate(inodeno_t &ino);
   };
 };

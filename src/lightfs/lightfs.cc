@@ -32,7 +32,7 @@ namespace lightfs
     }
   }
 
-  int InoGenerator::init_pool(int bits)
+  int InoGenerator::init_pool(IoCtx& ioctx, int bits)
   {
     if (bits < 1 || bits > 4)
       return -EINVAL;
@@ -42,7 +42,7 @@ namespace lightfs
       string oid;
       get_oid(i, oid);
 
-      r = cls_client::create_seq(&_ioctx, oid);
+      r = cls_client::create_seq(&ioctx, oid);
       if (r < 0)
         return r;
     }
@@ -50,13 +50,13 @@ namespace lightfs
     string oid;
     get_oid(-1, oid);
 
-    r = _ioctx.create(oid, false);
+    r = ioctx.create(oid, false);
     if (r < 0)
       return r;
 
     bufferlist data;
     ::encode(bits, data);
-    r = _ioctx.omap_set_header(oid, data);
+    r = ioctx.omap_set_header(oid, data);
     if (r < 0)
       return r;
 
