@@ -11,13 +11,15 @@ using namespace librados;
 namespace lightfs
 {
   InoGenerator::InoGenerator(const IoCtx &ioctx)
-    :_bits(0)
+    :_mutex("InoGenerator")
+    ,_bits(0)
   {
     _ioctx.dup(ioctx);
   }
 
   InoGenerator::~InoGenerator()
   {
+    close();
     _ioctx.close();
   }
 
@@ -32,17 +34,19 @@ namespace lightfs
     }
   }
 
-  int InoGenerator::init_pool(IoCtx& ioctx, int bits)
+  int InoGenerator::init_pool(int bits)
   {
     if (bits < 1 || bits > 4)
       return -EINVAL;
+
+    Mutex::Locker lock(_mutex);
 
     int r;
     for (int i = 0; i < (1 << bits); ++i) {
       string oid;
       get_oid(i, oid);
 
-      r = cls_client::create_seq(&ioctx, oid, i ? 0 : 1);
+      r = cls_client::create_seq(&_ioctx, oid, i ? 0 : 1);
       if (r < 0)
         return r;
     }
@@ -50,39 +54,59 @@ namespace lightfs
     string oid;
     get_oid(-1, oid);
 
-    r = ioctx.create(oid, false);
+    r = _ioctx.create(oid, false);
     if (r < 0)
       return r;
 
     bufferlist data;
     ::encode(bits, data);
-    r = ioctx.omap_set_header(oid, data);
+    r = _ioctx.omap_set_header(oid, data);
     if (r < 0)
       return r;
 
     return 0;
   }
 
+  int InoGenerator::open()
+  {
+    if (_bits)
+      return 0;
+
+    Mutex::Locker lock(_mutex);
+
+    int r;
+
+    string oid;
+    get_oid(-1, oid);
+
+    bufferlist data;
+    r = _ioctx.omap_get_header(oid, &data);
+    if (r < 0)
+      return r;
+
+    try {
+      bufferlist::iterator p = data.begin();
+      ::decode(_bits, p);
+    } catch (const buffer::error &err) {
+      return -EIO;
+    }
+
+    return 0;
+  }
+
+  void InoGenerator::close()
+  {
+    _bits = 0;
+  }
+
   int InoGenerator::generate(inodeno_t &ino)
   {
     int r;
 
-    if (_bits == 0) {
-      string oid;
-      get_oid(-1, oid);
+    if (_bits == 0)
+      return -EINVAL;
 
-      bufferlist data;
-      r = _ioctx.omap_get_header(oid, &data);
-      if (r < 0)
-        return r;
-
-      try {
-        bufferlist::iterator p = data.begin();
-        ::decode(_bits, p);
-      } catch (const buffer::error &err) {
-        return -EIO;
-      }
-    }
+    Mutex::Locker lock(_mutex);
 
     uint64_t max = (1 << (64 - _bits));
     while (true) {
