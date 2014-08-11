@@ -320,17 +320,39 @@ namespace lightfs
     return cls_cxx_map_get_val(hctx, key, &data);
   }
 
-  static int is_inode_not_exist(cls_method_context_t hctx, const string &name, inodeno_t hope_ino)
+  static int is_inode_not_exist(cls_method_context_t hctx, const string &name)
   {
     int r;
 
-    r = is_inode_exist(hctx, name, hope_ino);
-    if (r == -ENOENT)
-      return 0;
-    else if (r == 0)
-      return -EEXIST;
-    else
-      return r;
+    string key;
+    get_name_key(name, key);
+    bufferlist data;
+    r = cls_cxx_map_get_val(hctx, key, &data);
+
+    switch (r)
+    {
+      case -ENOENT:
+        return 0;
+      case 0:
+        return -EEXIST;
+      default:
+        return r;
+    };
+  }
+
+  static int is_inode_not_exist(cls_method_context_t hctx, inodeno_t ino)
+  {
+    int r = is_inode_exist(hctx, ino);
+
+    switch (r)
+    {
+      case -ENOENT:
+        return 0;
+      case 0:
+        return -EEXIST;
+      default:
+        return r;
+    };
   }
 
   static int do_link(cls_method_context_t hctx, const string& name, inodeno_t ino)
@@ -383,7 +405,11 @@ namespace lightfs
       return -EINVAL;
     }
 
-    r = is_inode_not_exist(hctx, name, ino);
+    r = is_inode_not_exist(hctx, name);
+    if (r < 0)
+      return r;
+
+    r = is_inode_not_exist(hctx, ino);
     if (r < 0)
       return r;
 
@@ -463,7 +489,7 @@ namespace lightfs
     if (r < 0)
       return r;
 
-    r = is_inode_not_exist(hctx, newname, ino);
+    r = is_inode_not_exist(hctx, newname);
     if (r < 0)
       return r;
 
