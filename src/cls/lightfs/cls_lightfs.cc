@@ -162,7 +162,7 @@ namespace lightfs
     r = cls_cxx_create(hctx, true);
     if (r < 0) {
       if (r == -EEXIST && !excl)
-        r = 0;
+        return 0;
       else
         return r;
     }
