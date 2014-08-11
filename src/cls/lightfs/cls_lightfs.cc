@@ -159,9 +159,13 @@ namespace lightfs
       return -EINVAL;
     }
 
-    r = cls_cxx_create(hctx, excl);
-    if (r < 0)
-      return r;
+    r = cls_cxx_create(hctx, true);
+    if (r < 0) {
+      if (r == -EEXIST && !excl)
+        r = 0;
+      else
+        return r;
+    }
 
     bufferlist data;
     inode.encode(data);
