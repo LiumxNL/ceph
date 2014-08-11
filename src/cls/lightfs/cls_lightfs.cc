@@ -395,6 +395,10 @@ namespace lightfs
 
     int r;
 
+    r = cls_cxx_stat(hctx, NULL, NULL);
+    if (r < 0)
+      return r;
+
     string name;
     inodeno_t ino;
     try {
