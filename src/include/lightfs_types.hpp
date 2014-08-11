@@ -28,6 +28,7 @@ namespace lightfs
   };
 
   typedef uint64_t inodeno_t;
+  const inodeno_t ROOT_INO = 0;
   
   struct inode_t {
     utime_t ctime;
