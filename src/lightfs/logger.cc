@@ -460,6 +460,8 @@ namespace lightfs
 
       if (handled)
         second = 0;
+
+      delete reader;
     }
 
     _reader_timer.add_event_after(second, new C_Logger_Cleaner(*this));
