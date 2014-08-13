@@ -45,9 +45,9 @@ namespace lightfs
     int gid;
 
     inode_t() :
-      ctime(0),
-      atime(0),
-      mtime(0),
+      ctime(),
+      atime(),
+      mtime(),
       size(0),
       max_size(0),
       truncate_size(0),
