@@ -92,8 +92,8 @@ namespace lightfs
     ,_writer_count(0)
     ,_writer_flusher(NULL)
     ,_writer_timer(_cct, _writer_mutex)
+    ,_transaction(0)
     ,_bits(0)
-    ,transaction("Logger::Transaction")
   {
     _reader_ioctx.dup(ioctx);
     _writer_ioctx.dup(ioctx);
@@ -181,6 +181,7 @@ namespace lightfs
 
   void Logger::close()
   {
+    assert(_transaction == 0);
     {
       Mutex::Locker lock(_reader_mutex);
       _reader_timer.shutdown();
@@ -214,9 +215,12 @@ namespace lightfs
       get_oid_entry(oid, queue, tail);
 
       ObjectWriteOperation op;
+
       op.create(true);
+
       utime_t duration(3600, 0);
       rados::cls::lock::lock(&op, "Logger", LOCK_EXCLUSIVE, "Writer", "", "", duration, 0);
+
       r = _writer_ioctx.operate(oid, &op);
       if (r < 0) {
         if (r == -EEXIST) {
@@ -255,15 +259,26 @@ namespace lightfs
   void Logger::do_flush()
   {
     assert(_writer_mutex.is_locked());
-    if (transaction.is_locked()) {
+
+    string oid;
+    get_oid_entry(oid, _writer_queue, _writer_pos);
+
+    if (_transaction) {
+      ObjectWriteOperation op;
+
+      bufferlist cmp;
+      op.cmpxattr("state", CEPH_OSD_CMPXATTR_OP_EQ, cmp);
+
+      utime_t duration(3600, 0);
+      rados::cls::lock::lock(&op, "Logger", LOCK_EXCLUSIVE, "Writer", "", "", duration, LOCK_FLAG_RENEW);
+
+      _writer_ioctx.operate(oid, &op);
+
       pend_flush(60);
       return;
     }
 
     cancel_flush();
-
-    string oid;
-    get_oid_entry(oid, _writer_queue, _writer_pos);
 
     int r = _writer_ioctx.unlock(oid, "Logger", "Writer");
     if (r < 0) {
@@ -320,7 +335,7 @@ namespace lightfs
         return r;
       }
 
-      pend_flush((++_writer_count >= 1024) ? 0 : 3600);
+      pend_flush((++_writer_count >= 1024) ? 0 : 1800);
 
       return 0;
     }
@@ -431,5 +446,25 @@ namespace lightfs
     }
 
     _reader_timer.add_event_after(handled ? 0 : 180, new C_Logger_Cleaner(*this));
+  }
+
+  Logger::Transaction::Transaction(Logger &logger)
+    :_logger(logger)
+  {
+    Mutex::Locker lock(_logger._writer_mutex);
+    ++_logger._transaction;
+  }
+
+  Logger::Transaction::Transaction(const Transaction &copy)
+    :_logger(copy._logger)
+  {
+    Mutex::Locker lock(_logger._writer_mutex);
+    ++_logger._transaction;
+  }
+
+  Logger::Transaction::~Transaction()
+  {
+    Mutex::Locker lock(_logger._writer_mutex);
+    --_logger._transaction;
   }
 };

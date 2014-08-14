@@ -40,6 +40,7 @@ namespace lightfs
     int _writer_count;
     Context * _writer_flusher;
     SafeTimer _writer_timer;
+    int _transaction;
     int open_writer();
     void pend_flush(int second);
     void cancel_flush();
@@ -63,9 +64,17 @@ namespace lightfs
     Logger(const char *prefix, librados::IoCtx &ioctx);
     virtual ~Logger();
     int open();
-    void close();// Do not call it when transaction locked.
+    void close();
 
-    Mutex transaction;
+    class Transaction
+    {
+    private:
+      Logger &_logger;
+    public:
+      Transaction(Logger &logger);
+      Transaction(const Transaction &copy);
+      ~Transaction();
+    };
     void flush();
 
     void cleaner();
