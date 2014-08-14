@@ -650,3 +650,12 @@ int cls_cxx_notify(cls_method_context_t hctx, bufferlist *inbl)
   return (*pctx)->pg->do_osd_ops(*pctx, ops);
 
 }
+
+int cls_cxx_check_watch(cls_method_context_t hctx)
+{
+  ReplicatedPG::OpContext **pctx = (ReplicatedPG::OpContext **)hctx;
+  if (*pctx->obc->obs.oi.watchers.size())
+    return -EBUSY;
+  else
+    return 0;
+}
