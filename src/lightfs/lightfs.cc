@@ -5,7 +5,6 @@
 #include "lightfs.hpp"
 #include "cls/lightfs/cls_lightfs_client.h"
 
-using namespace std;
 using namespace librados;
 
 namespace lightfs
@@ -257,5 +256,120 @@ namespace lightfs
       --count;
     }
   }
+
+  void get_inode_oid(inodeno_t ino, std::string &oid)
+  {
+    oid.clear();
+    char oid_str[32] = {'\0'};
+    if (ino == 0) { 
+      oid = "inode.0";
+      return;
+    }
+
+    snprintf(oid_str, sizeof(oid_str), "inode.%08lX", ino);
+    oid = oid_str;
+  }
+
+  /* class Lightfs */
+  bool Lightfs::create_root()
+  {
+    if (has_root)
+      return true;
+    int r = -1;
+    inode_t inode;
+    std::string oid("inode.0");
+
+    r = cls_client::create_inode(_ioctx, oid, true, inode);
+    if (r == 0 || r == -EEXIST) {
+      has_root = true;
+      return true;
+    }
+    return false;
+  }
+
+  int Lightfs::do_mkdir(inodeno_t pino, const char *name, inodeno_t myino)
+  {
+    inode_t inode;
+    int r = -1;
+    string oid;
+    string poid;
+    get_inode_oid(myino, oid);
+    get_inode_oid(pino, poid);
+
+    // 1. generate ino and create child inode 
+    r = cls_client::create_inode(_ioctx, oid, true, inode);
+    if (r < 0)
+        return r;
+    
+    // 2. add <N.name, myino> & <I.myino, name> entry to parent  
+    r = cls_client::link_inode(_ioctx, poid, name, myino);
+    // 3. if 2 failed, remove child inode
+    if (r < 0) {
+      r = cls_client::remove_inode(_ioctx, oid);
+      if (r < 0)
+	return r; 
+    } 
+    // if 2 or 3 is interrupted(network disconnnected), log will clean(recycle) child inode
+    return 0;
+  }
+
+  int Lightfs::mkdir(inodeno_t pino, const char *name)
+  {
+    if (!_ino_gen)
+      return -EINVAL;
+    inodeno_t ino = -1;
+    _ino_gen->generate(ino);
+    return do_mkdir(pino, name, ino);
+  }
+
+  int Lightfs::readdir(inodeno_t ino, std::map<std::string, inodeno_t> &result)
+  {
+    int r = -1;
+    long unsigned max_return = (uint64_t)-1;
+
+    string oid;
+    get_inode_oid(ino, oid);
+    return cls_client::list_inode(_ioctx, oid, "", max_return, &result);
+  }
+
+  int Lightfs::rmdir(inodeno_t pino, const char *name)
+  {
+    int r = -1;
+    string poid;
+    get_inode_oid(pino, poid);
+
+    inodeno_t ino = -1;
+    // 1. lookup name's ino
+    r = cls_client::find_inode(_ioctx, poid, name, ino);
+    if (r < 0)
+      return r;
+
+    // 2. unlink <N.name, ino> & <I.ino, name> in parent
+    // log backend will remove sub inode and its subs
+    return cls_client::unlink_inode(_ioctx, poid, name, ino);
+  }
+
+  int Lightfs::lookup(inodeno_t pino, const char *name, inodeno_t &ino)
+  {
+    string poid;
+    get_inode_oid(pino, poid);
+    
+    return cls_client::find_inode(_ioctx, poid, name, ino);
+  }
+
+  int Lightfs::rename(inodeno_t pino, const char *oldname, const char *newname)
+  {
+    int r = -1;
+    string poid;
+    get_inode_oid(pino, poid);
+    inodeno_t ino = -1;
+    
+    r = cls_client::find_inode(_ioctx, poid, oldname, ino);    
+    if (r < 0)
+      return r;
+
+    return cls_client::rename_inode(_ioctx, poid, oldname, newname, ino);
+  }
+
 };
 

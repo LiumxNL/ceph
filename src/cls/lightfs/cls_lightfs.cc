@@ -393,7 +393,7 @@ namespace lightfs
   {
     CLS_LOG(20, "lightfs link_inode");
 
-    int r;
+    int r = -1;
 
     r = cls_cxx_stat(hctx, NULL, NULL);
     if (r < 0)

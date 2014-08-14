@@ -73,6 +73,52 @@ namespace lightfs
 
     void trim(int count);
   };
+
+  void get_inode_oid(inodeno_t ino, std::string &oid);
+  
+  class CInode
+  {
+  public:
+    inodeno_t _ino; //inode number
+    inode_t _inode; //metadata
+    int cache_flag;
+    std::map<std::string, CInode *> subs_cache;
+    CInode(inodeno_t ino, inode_t &inode, int flag) :
+      _ino(ino), _inode(inode), cache_flag(flag)
+    {}
+    ~CInode() {}
+  };
+  
+  class Lightfs
+  {
+  private:
+    bool has_root;
+  public:
+    std::map<inodeno_t, CInode *> _inode_cache;
+    librados::IoCtx *_ioctx;
+    InoGenerator *_ino_gen;
+    
+    Lightfs(librados::IoCtx *ctx, InoGenerator *ino_gen) :
+      has_root(false), _inode_cache(), _ioctx(ctx), _ino_gen(ino_gen)
+    {}
+    ~Lightfs() {}
+  
+    bool create_root();
+    
+    /* inode ops */
+    int do_mkdir(inodeno_t pino, const char *name, inodeno_t myino);
+    int mkdir(inodeno_t pino, const char *name);
+    int readdir(inodeno_t ino, std::map<std::string, inodeno_t> &result);
+    int rmdir(inodeno_t pino, const char *name);
+    int lookup(inodeno_t pino, const char *name, inodeno_t &ino);
+    int rename(inodeno_t pino, const char *oldname, const char *newname);
+    
+    /* file ops */
+    int open();
+    int read();
+    int write();
+    int truncate();
+  };
 };
 
 #endif
