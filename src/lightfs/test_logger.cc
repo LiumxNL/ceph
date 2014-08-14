@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <iostream>
 #include <string>
 #include <string.h>
@@ -15,8 +16,6 @@ using namespace librados;
 
 namespace lightfs
 {
-
-  Mutex mutex("LoggerTest");
 
   class LoggerTest: public Logger
   {
@@ -36,12 +35,12 @@ namespace lightfs
       {
         cout << "decode entry failed" << std::endl;
       }
-      cout << "LOG(" << value << "," << r << "," << count << ")" << std::endl;
       entry.clear();
       int newcount = count - 1;
       ::encode(r, entry);
       ::encode(newcount, entry);
       ::encode(value, entry);
+      cout << "READ LOG(" << value << "," << r << "," << count << ") by " << this << std::endl;
       if (count == 0)
         return 0;
       else
@@ -57,6 +56,7 @@ namespace lightfs
       ::encode(r, entry);
       ::encode(count, entry);
       ::encode(data, entry);
+      cout << "WRITE LOG(" << data << "," << r << "," << count << ")" << std::endl;
       return Logger::log(entry);
     }
   };
@@ -91,6 +91,7 @@ namespace lightfs
     cout << "Begin...." << std::endl;
     {
       LoggerTest test(ioctx);
+      LoggerTest test1(ioctx);
       if (argc == 2 && strcmp(argv[1], "init") == 0) {
         test.init_pool(2);
         cout << "Init done." << std::endl;
@@ -101,20 +102,50 @@ namespace lightfs
         cout << "open Logger test failed ret: " << r << std::endl;
         goto err_close;
       }
+      r = test1.open();
+      if (r < 0) {
+        cout << "open Logger test failed ret: " << r << std::endl;
+        goto err_close_test;
+      }
 
       cout << "DO LOG...." << std::endl;
-      test.log(0, 10, "OK0");
-      test.log(0, 10, "OK1");
-      test.log(0, 10, "OK2");
-      test.log(0, 10, "OK3");
-      test.log(0, 10, "OK4");
+      for (int i = 0; i < 100; ++i) {
+        int err = rand() & 0x3;
+        switch(err)
+        {
+          case 1:
+            err = -EBUSY;
+            break;
+          case 2:
+            err = -EINVAL;
+            break;
+          case 3:
+            err = -EAGAIN;
+            break;
+        };
+        {
+          Logger::Transaction trans(test);
 
-      cout << "DO FLUSH..." << std::endl;
-      test.flush();
+          test.log(err, rand() & 0x3, "S0");
+          test.log(err, rand() & 0x3, "S1");
+          test.log(err, rand() & 0x3, "S2");
+          test.log(err, rand() & 0x3, "S3");
+          test.log(err, rand() & 0x3, "S4");
+
+          test.flush();
+        }
+        test.flush();
+        
+        sleep(5);
+      }
+
       cout << "Wait....." << std::endl;
-      sleep(99999999);
 
-    err_close_logger:
+      getchar();
+
+      cout << "Before ending..." << std::endl;
+      test1.close();
+  err_close_test:
       test.close();
     }
     
