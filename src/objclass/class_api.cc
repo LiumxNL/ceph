@@ -638,7 +638,7 @@ int cls_log(int level, const char *format, ...)
    }
 }
 
-int cls_notify(cls_method_context_t hctx, bufferlist *inbl)
+int cls_cxx_notify(cls_method_context_t hctx, bufferlist *inbl)
 {
   ReplicatedPG::OpContext **pctx = (ReplicatedPG::OpContext **)hctx;
   vector<OSDOp> ops(1);
