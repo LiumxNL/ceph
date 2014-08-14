@@ -648,7 +648,6 @@ int cls_cxx_notify(cls_method_context_t hctx, bufferlist *inbl)
   ops[0].indata = *inbl;
 
   return (*pctx)->pg->do_osd_ops(*pctx, ops);
-
 }
 
 int cls_cxx_check_watch(cls_method_context_t hctx)
