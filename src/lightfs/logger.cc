@@ -25,190 +25,12 @@ namespace lightfs
     return (CephContext *)const_cast<IoCtx &>(ioctx).cct();
   }
 
-  class LoggerReader
-  {
-  private:
-    Logger *_logger;
-    int _queue;
-    uint64_t _head;
-    LoggerReader() {}
-  public:
-    ~LoggerReader()
-    {
-      int r;
-      string oid;
-
-      ObjectWriteOperation op;
-      rados::cls::lock::unlock(&op, "LoggerReader", "LoggerCookie");
-      op.remove();
-      _logger->get_oid_entry(oid, _queue, _head);
-      r = _logger->_reader_ioctx.operate(oid, &op);
-      if (r < 0) {
-        ldout(_logger->_cct, 10) << "Failed to delete logger (" << oid << ") error: " << r << dendl;
-        return;
-      }
-
-      _logger->get_oid_head(oid, _queue);
-      r = cls_client::write_seq(&_logger->_reader_ioctx, oid, _head);
-      if (r < 0) {
-        ldout(_logger->_cct, 5) << "Failed to update head (" << oid << " , " << _head << ") error: " << r << dendl;        
-      }
-    }
-    static LoggerReader *open(Logger *logger, int queue)
-    {
-      int r;
-      string oid;
-      LoggerReader *result;
-
-      uint64_t head;
-      logger->get_oid_head(oid, queue);
-      r = cls_client::read_seq(&logger->_reader_ioctx, oid, head);
-      if (r < 0)
-        goto err;
-
-      uint64_t tail;
-      logger->get_oid_tail(oid, queue);
-      r = cls_client::read_seq(&logger->_reader_ioctx, oid, tail);
-      if (r < 0)
-        goto err;
-
-      if (head == tail) {
-        r = -EAGAIN;
-        goto err;
-      }
-
-      logger->get_oid_entry(oid, queue, head);
-      uint64_t size;
-      time_t mtime;
-      r = logger->_reader_ioctx.stat(oid, &size, &mtime);
-      if (r < 0)
-        goto err;
-
-      r = logger->_reader_ioctx.lock_exclusive(oid, "LoggerReader", "LoggerCookie", "LoggerReader", NULL, 0);
-      if (r < 0)
-        goto err;
-
-      result = new LoggerReader();
-      result->_head = head;
-      result->_queue = queue;
-      result->_logger = logger;
-      return result;
-
-    err:
-      assert(r < 0);
-      return (LoggerReader *)(size_t)r;
-    }
-    int read(deque<bufferlist> &list)
-    {
-      list.clear();
-
-      string oid;
-      _logger->get_oid_entry(oid, _queue, _head);
-      bufferlist data;
-    again:
-      uint64_t off = 0;
-      bufferlist temp;
-      int r = _logger->_reader_ioctx.read(oid, temp, 65536, off);
-      if (r < 0)
-        goto err;
-      if (temp.length()) {
-        off += temp.length();
-        data.claim_append(temp);
-        goto again;
-      }
-
-      try {
-        bufferlist::iterator p = data.begin();
-        while (!p.end()) {
-          bufferlist entry;
-          list.push_back(entry);
-          ::decode(list.back(), p);
-        }
-      } catch (const buffer::error &err) {
-        r = -EIO;
-        goto err;
-      }
-
-    err:
-      return r;
-    }
-  };
-
-  class LoggerWriter
-  {
-  private:
-    Logger *_logger;
-    int _queue;
-    string _oid;
-    int _count;
-    LoggerWriter() {}
-  public:
-    ~LoggerWriter()
-    {
-      int r = _logger->_writer_ioctx.unlock(_oid, "LoggerWriter", "LoggerCookie");
-      if (r < 0) {
-        ldout(_logger->_cct, 10) << "Failed to unlock logger (" << _oid << ") error: " << r << dendl;
-      }
-    }
-    static LoggerWriter *open(Logger *logger, int queue)
-    {
-      int r;
-      LoggerWriter *result;
-
-      string oid;
-      string tail_oid;
-      logger->get_oid_tail(tail_oid, queue);
-    again:
-      uint64_t tail;
-      r = cls_client::read_seq(&logger->_writer_ioctx, tail_oid, tail);
-      if (r < 0)
-        goto err;
-
-      logger->get_oid_entry(oid, queue, tail);
-      r = logger->_writer_ioctx.create(oid, true);
-      if (r < 0) {
-        if (r == -EEXIST) {
-          r = cls_client::write_seq(&logger->_writer_ioctx, tail_oid, tail);
-          if (r == 0 || r == -ENOEXEC)
-            goto again;
-        }
-        goto err;
-      }
-
-      r = logger->_writer_ioctx.lock_exclusive(oid, "LoggerWriter", "LoggerCookie", "LoggerWriter", NULL, 0);
-      if (r < 0)
-        goto err;
-
-      cls_client::write_seq(&logger->_writer_ioctx, tail_oid, tail);
-
-      result = new LoggerWriter();
-      result->_logger = logger;
-      result->_oid = oid;
-      result->_queue = queue;
-      result->_count = 0;
-      return result;
-
-    err:
-      assert(r < 0);
-      return (LoggerWriter *)(size_t)r;
-    }
-    int write(bufferlist &entry)
-    {
-      bufferlist data;
-      ::encode(entry, data);
-
-      ++_count;
-      return _logger->_writer_ioctx.append(_oid, data, data.length());
-    }
-    int count() { return _count; }
-  };
-
   class C_Logger_Flusher : public Context
   {
   protected:
     virtual void finish(int r)
     {
-      _logger.flush();
+      _logger.do_flush();
     }
   private:
     Logger &_logger;
@@ -263,12 +85,13 @@ namespace lightfs
     :_cct(get_cct(ioctx))
     ,_prefix(prefix)
     ,_reader_mutex("Logger::Reader")
-    ,_reader_last_queue(0)
     ,_reader_timer(_cct, _reader_mutex, false)
     ,_writer_mutex("Logger::Writer")
-    ,_writer(NULL)
+    ,_writer_queue(-1)
+    ,_writer_pos(0)
+    ,_writer_count(0)
     ,_writer_flusher(NULL)
-    ,_writer_timer(_cct, _writer_mutex, false)
+    ,_writer_timer(_cct, _writer_mutex)
     ,_bits(0)
     ,transaction("Logger::Transaction")
   {
@@ -288,6 +111,7 @@ namespace lightfs
     if (bits < 1 || bits > 4)
       return -EINVAL;
 
+    ldout(_cct, 1) << "initialize logger ( " << _prefix << " ) pool." << dendl;
     Mutex::Locker lock(_reader_mutex);
 
     int r;
@@ -370,24 +194,90 @@ namespace lightfs
     _bits = 0;
   }
 
-  void Logger::flush()
+  int Logger::open_writer()
   {
-    Mutex::Locker lock_trans(transaction);
-    Mutex::Locker lock(_writer_mutex);
+    assert(_writer_queue < 0);
+    int r;
 
+    int queue = rand() & bits_mask();
+
+    string tail_oid;
+    get_oid_tail(tail_oid, queue);
+
+    while (true) {
+      uint64_t tail;
+      r = cls_client::read_seq(&_writer_ioctx, tail_oid, tail);
+      if (r < 0)
+        return r;
+
+      string oid;
+      get_oid_entry(oid, queue, tail);
+
+      ObjectWriteOperation op;
+      op.create(true);
+      utime_t duration(3600, 0);
+      rados::cls::lock::lock(&op, "Logger", LOCK_EXCLUSIVE, "Writer", "", "", duration, 0);
+      r = _writer_ioctx.operate(oid, &op);
+      if (r < 0) {
+        if (r == -EEXIST) {
+          r = cls_client::write_seq(&_writer_ioctx, tail_oid, tail);
+          if (r == 0 || r == -ENOEXEC)
+            continue;
+        }
+        return r;
+      }
+
+      cls_client::write_seq(&_writer_ioctx, tail_oid, tail);
+
+      _writer_queue = queue;
+      _writer_pos = tail;
+      _writer_count = 0;
+
+      return 0;
+    }
+  }
+
+  void Logger::pend_flush(int second)
+  {
+    cancel_flush();
+    _writer_flusher = new C_Logger_Flusher(*this);
+    _writer_timer.add_event_after(second, _writer_flusher);
+  }
+
+  void Logger::cancel_flush()
+  {
     if (_writer_flusher) {
       _writer_timer.cancel_event(_writer_flusher);
       _writer_flusher = NULL;
     }
+  }
 
-    if (_writer) {
-      delete _writer;
-      LoggerWriter *writer = LoggerWriter::open(this, rand() & bits_mask());
-      if (!IS_ERR(writer))
-        _writer = writer;
-      else
-        _writer = NULL;
+  void Logger::do_flush()
+  {
+    assert(_writer_mutex.is_locked());
+    if (transaction.is_locked()) {
+      pend_flush(60);
+      return;
     }
+
+    cancel_flush();
+
+    string oid;
+    get_oid_entry(oid, _writer_queue, _writer_pos);
+
+    int r = _writer_ioctx.unlock(oid, "Logger", "Writer");
+    if (r < 0) {
+      ldout(_cct, 10) << "Failed to unlock logger (" << oid << ") error: " << r << dendl;
+    }
+
+    _writer_queue = -1;
+  }
+
+  void Logger::flush()
+  {
+    Mutex::Locker lock(_writer_mutex);
+    if (_writer_queue >= 0)
+      do_flush();
   }
 
   int Logger::log(bufferlist &entry)
@@ -395,26 +285,88 @@ namespace lightfs
     if (!_bits)
       return -EINVAL;
 
+    int r;
     Mutex::Locker lock(_writer_mutex);
-    if (!_writer) {
-      LoggerWriter *writer = LoggerWriter::open(this, rand() & bits_mask());
-      if (IS_ERR(writer))
-        return PTR_ERR(writer);
-      _writer = writer;
+
+    while (true) {
+      if (_writer_queue < 0) {
+        r = open_writer();
+        if (r < 0)
+          return r;
+      }
+
+      string oid;
+      get_oid_entry(oid, _writer_queue, _writer_pos);
+
+      ObjectWriteOperation op;
+
+      bufferlist cmp;
+      op.cmpxattr("state", CEPH_OSD_CMPXATTR_OP_EQ, cmp);
+
+      utime_t duration(3600, 0);
+      rados::cls::lock::lock(&op, "Logger", LOCK_EXCLUSIVE, "Writer", "", "", duration, LOCK_FLAG_RENEW);
+
+      bufferlist data;
+      ::encode(entry, data);
+      op.append(data);
+
+      r = _writer_ioctx.operate(oid, &op);
+      if (r < 0) {
+        if (r == -EBUSY || r == -ENOENT || r == -ECANCELED) {
+          _writer_queue = -1;
+          cancel_flush();
+          continue;
+        }
+        return r;
+      }
+
+      pend_flush((++_writer_count >= 1024) ? 0 : 3600);
+
+      return 0;
+    }
+  }
+
+  int Logger::do_handle(const string &oid)
+  {
+    bool handled = false;
+    int r;
+    bufferlist data;
+
+    while (true) {
+      bufferlist buf;
+
+      r = _reader_ioctx.read(oid, buf, 65536, data.length());
+      if (r < 0)
+        return r;
+
+      if (buf.length() == 0)
+        break;
+
+      data.claim_append(buf);
     }
 
-    int r = _writer->write(entry);
-    if (r < 0)
-      return r;
+    try {
+      bufferlist::iterator p = data.begin();
+      while (!p.end()) {
+        bufferlist entry;
+        ::decode(entry, p);
 
-    bool full = _writer->count() >= 1024;
+        _reader_mutex.Unlock();
 
-    if (_writer_flusher)
-      _writer_timer.cancel_event(_writer_flusher);
-    _writer_flusher = new C_Logger_Flusher(*this);
-    _writer_timer.add_event_after(full ? 0 : 3600, _writer_flusher);
+        // entry can be changed by (handle)
+        r = handle(entry);
+        if (r == -EBUSY)
+          log(entry);
+        else if (r == 0)
+          handled = true;
 
-    return 0;
+        _reader_mutex.Lock();
+      }
+    } catch (const buffer::error &err) {
+      return -EIO;
+    }
+
+    return handled ? 0 : -EBUSY;
   }
 
   void Logger::cleaner()
@@ -422,48 +374,62 @@ namespace lightfs
     if (!_bits)
       return;
 
-    int second = 180;
+    bool handled = false;
     Mutex::Locker lock(_reader_mutex);
-    LoggerReader *reader = NULL;
 
-    for (int i = _reader_last_queue + 1; i < _reader_last_queue + bits_count() + 1; ++i) {
-      int queue = i & bits_mask();
+    for (int queue = 0; queue < bits_count(); ++queue) {
+      int r;
 
-      reader = LoggerReader::open(this, queue);
-      if (!IS_ERR(reader)) {
-        _reader_last_queue = queue;
-        break;
-      }
-    }
-
-    if (!IS_ERR(reader) && reader) {
-      deque<bufferlist> list;
-      bool handled = false;
-
-      int r = reader->read(list); // ignore any error;
+      string head_oid;
+      uint64_t head;
+      get_oid_head(head_oid, queue);
+      r = cls_client::read_seq(&_reader_ioctx, head_oid, head);
       if (r < 0)
-        ldout(_cct, 5) << "Read logger entry failed (" << _reader_last_queue << ")" << dendl;
+        continue;
 
-      while (!list.empty()) {
-        bufferlist &entry = list.front();
+      string tail_oid;
+      uint64_t tail;
+      get_oid_tail(tail_oid, queue);
+      r = cls_client::read_seq(&_reader_ioctx, tail_oid, tail);
+      if (r < 0)
+        continue;
 
-        r = handle(entry);
-        if (r == -EBUSY)
-          log(entry);
-        else if (r == 0)
-          handled = true;
-        else
-          ldout(_cct, 5) << " handle logger entry failed." << dendl;
+      if (head == tail)
+        continue;
 
-        list.pop_front();
-      }
+      string oid;
+      get_oid_entry(oid, queue, head);
+      r = _reader_ioctx.stat(oid, NULL, NULL);
+      if (r < 0)
+        continue;
 
-      if (handled)
-        second = 0;
+      ObjectWriteOperation oplock;
 
-      delete reader;
+      utime_t duration(3600, 0);
+      rados::cls::lock::lock(&oplock, "Logger", LOCK_EXCLUSIVE, "Reader", "", "", duration, 0);
+
+      bufferlist cmp;
+      cmp.append("read");
+      oplock.setxattr("state", cmp);
+
+      r = _reader_ioctx.operate(oid, &oplock);
+      if (r < 0)
+        continue;
+
+      r = do_handle(oid);
+      if (r == 0)
+        handled = true;
+
+      ObjectWriteOperation opunlock;
+      rados::cls::lock::unlock(&opunlock, "Logger", "Reader");
+      opunlock.remove();
+      r = _reader_ioctx.operate(oid, &opunlock);
+      if (r < 0)
+        continue;
+
+      cls_client::write_seq(&_reader_ioctx, head_oid, head);
     }
 
-    _reader_timer.add_event_after(second, new C_Logger_Cleaner(*this));
+    _reader_timer.add_event_after(handled ? 0 : 180, new C_Logger_Cleaner(*this));
   }
 };

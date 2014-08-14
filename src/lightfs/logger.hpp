@@ -12,13 +12,13 @@
 
 namespace lightfs
 {
-  class LoggerReader;
-  class LoggerWriter;
+  class C_Logger_Flusher;
+  class C_Logger_Cleaner;
 
   class Logger
   {
-    friend class LoggerReader;
-    friend class LoggerWriter;
+    friend class C_Logger_Cleaner;
+    friend class C_Logger_Flusher;
   private:
     CephContext *_cct;
 
@@ -30,20 +30,32 @@ namespace lightfs
 
     librados::IoCtx _reader_ioctx;
     Mutex _reader_mutex;
-    int _reader_last_queue;
     SafeTimer _reader_timer;
+    int do_handle(const std::string &oid);
 
     librados::IoCtx _writer_ioctx;
     Mutex _writer_mutex;
-    LoggerWriter *_writer;
+    int _writer_queue;
+    uint64_t _writer_pos;
+    int _writer_count;
     Context * _writer_flusher;
     SafeTimer _writer_timer;
+    int open_writer();
+    void pend_flush(int second);
+    void cancel_flush();
+    void do_flush();
 
     int _bits;
     inline int bits_count() { return 1 << _bits; }
     inline int bits_mask() { return bits_count() - 1; }
   protected:
     int log(bufferlist &entry);
+    /*
+         * ret:
+         * 0 on success
+         * -EBUSY on retry, and entry can be changed.
+         * else will be ignore
+       */ 
     virtual int handle(bufferlist &entry) = 0;
   public:
     int init_pool(int bits);
