@@ -110,7 +110,7 @@ namespace lightfs
 
     uint64_t max = (1 << (64 - _bits));
     while (true) {
-      int index = rand() & ((1 << _bits) - 1);
+      long unsigned index = rand() & ((1 << _bits) - 1);
       string oid;
       get_oid(index, oid);
 
