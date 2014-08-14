@@ -243,13 +243,15 @@ namespace lightfs
 
   void Logger::pend_flush(int second)
   {
-    cancel_flush();
+    if (_writer_flusher)
+      _writer_timer.cancel_event(_writer_flusher);
     _writer_flusher = new C_Logger_Flusher(*this);
     _writer_timer.add_event_after(second, _writer_flusher);
   }
 
   void Logger::cancel_flush()
   {
+    _writer_queue = -1;
     if (_writer_flusher) {
       _writer_timer.cancel_event(_writer_flusher);
       _writer_flusher = NULL;
@@ -272,20 +274,21 @@ namespace lightfs
       utime_t duration(3600, 0);
       rados::cls::lock::lock(&op, "Logger", LOCK_EXCLUSIVE, "Writer", "", "", duration, LOCK_FLAG_RENEW);
 
-      _writer_ioctx.operate(oid, &op);
+      int r = _writer_ioctx.operate(oid, &op);
+      if (r < 0)
+        cancel_flush();
+      else
+        pend_flush(300);
 
-      pend_flush(60);
       return;
     }
-
-    cancel_flush();
 
     int r = _writer_ioctx.unlock(oid, "Logger", "Writer");
     if (r < 0) {
       ldout(_cct, 10) << "Failed to unlock logger (" << oid << ") error: " << r << dendl;
     }
 
-    _writer_queue = -1;
+    cancel_flush();
   }
 
   void Logger::flush()
@@ -327,12 +330,11 @@ namespace lightfs
 
       r = _writer_ioctx.operate(oid, &op);
       if (r < 0) {
-        if (r == -EBUSY || r == -ENOENT || r == -ECANCELED) {
-          _writer_queue = -1;
-          cancel_flush();
+        cancel_flush();
+        if (r == -EBUSY || r == -ENOENT || r == -ECANCELED)
           continue;
-        }
-        return r;
+        else
+          return r;
       }
 
       pend_flush((++_writer_count >= 1024) ? 0 : 1800);
