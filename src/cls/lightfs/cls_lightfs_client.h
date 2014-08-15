@@ -11,10 +11,16 @@
 namespace lightfs {
   namespace cls_client {
 
+    void create_seq(librados::ObjectWriteOperation *rados_op,
+        uint64_t init_seq);
     int create_seq(librados::IoCtx *ioctx, const std::string &oid,
         uint64_t init_seq);
+    void read_seq_start(librados::ObjectReadOperation *rados_op);
+    int read_seq_end(bufferlist *outbl, uint64_t &seq);
     int read_seq(librados::IoCtx *ioctx, const std::string &oid, 
         uint64_t &seq);
+    void write_seq(librados::ObjectWriteOperation *rados_op,
+        uint64_t now);
     int write_seq(librados::IoCtx *ioctx, const std::string &oid, 
         uint64_t now);
 

@@ -3,47 +3,66 @@
 namespace lightfs {
   namespace cls_client {
 
+    void create_seq(librados::ObjectWriteOperation *rados_op,
+        uint64_t init_seq)
+    {
+      bufferlist in;
+      ::encode(init_seq, in);
+      rados_op->exec("lightfs", "create_seq", in);
+    }
+
     int create_seq(librados::IoCtx *ioctx, const std::string &oid,
         uint64_t init_seq)
     {
-      bufferlist inbl;
-      bufferlist outbl;
-
-      ::encode(init_seq, inbl);
-      return ioctx->exec(oid, "lightfs", "create_seq", inbl, outbl);
+      librados::ObjectWriteOperation op;
+      create_seq(&op, init_seq);
+      return ioctx->operate(oid, &op);
     }
 
-    int read_seq(librados::IoCtx *ioctx, const std::string &oid, 
-        uint64_t &seq)
+    void read_seq_start(librados::ObjectReadOperation *rados_op)
     {
-      int r;
+      bufferlist empty;
+      rados_op->exec("lightfs", "read_seq", empty);
+    }
 
-      bufferlist inbl;
-      bufferlist outbl;
-
-      r = ioctx->exec(oid, "lightfs", "read_seq", inbl, outbl);
-      if (r < 0)
-        return r;
-
+    int read_seq_end(bufferlist *outbl, uint64_t &seq)
+    {
       try {
-        bufferlist::iterator p = outbl.begin();
+        bufferlist::iterator p = outbl->begin();
         ::decode(seq, p);
       } catch (const buffer::error &err) {
-        assert(0);
-        return -EIO;
+        return -EBADMSG;
       }
-
       return 0;
     }
 
-    int write_seq(librados::IoCtx *ioctx, const std::string &oid, 
+    int read_seq(librados::IoCtx *ioctx, const std::string &oid,
+        uint64_t &seq)
+    {
+      int r;
+      bufferlist out;
+      librados::ObjectReadOperation op;
+      read_seq_start(&op);
+      r = ioctx->operate(oid, &op, &out);
+      if (r < 0)
+        return r;
+      return read_seq_end(&out, seq);
+    }
+
+    void write_seq(librados::ObjectWriteOperation *rados_op,
         uint64_t now)
     {
-      bufferlist inbl;
-      bufferlist outbl;
+      bufferlist in;
+      ::encode(now, in);
+      rados_op->exec("lightfs", "write_seq", in);
+    }
 
-      ::encode(now, inbl);
-      return ioctx->exec(oid, "lightfs", "write_seq", inbl, outbl);
+    int write_seq(librados::IoCtx *ioctx, const std::string &oid,
+        uint64_t now)
+    {
+      librados::ObjectWriteOperation op;
+      write_seq(&op, now);
+      return ioctx->operate(oid, &op);
     }
 
     int create_inode(librados::IoCtx *ioctx, const std::string &oid, 
