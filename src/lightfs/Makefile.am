@@ -23,4 +23,11 @@ lightfs_test_fs_SOURCES = lightfs/test_fs.cc
 lightfs_test_fs_LDADD = liblightfs.la
 bin_PROGRAMS += lightfs_test_fs
 
+lightfs_watch_SOURCES = lightfs/watch.cc
+lightfs_watch_LDADD = liblightfs.la
+bin_PROGRAMS += lightfs_watch
+
+lightfs_notify_SOURCES = lightfs/notify.cc
+lightfs_notify_LDADD = liblightfs.la
+bin_PROGRAMS += lightfs_notify
 endif
