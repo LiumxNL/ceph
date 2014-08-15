@@ -132,5 +132,130 @@ namespace lightfs
       return 0;
     }
   }
+
+  CInode::CInode()
+    :_lru(this)
+    ,_ref(1)
+  {}
+
+  CInode::~CInode()
+  {
+    assert(_root);
+    assert(this == _root || _ref == 0);
+    assert(_parent == NULL);
+
+    _root->_cache.erase(_ino);
+  }
+
+  void CInode::get()
+  {
+    if (_ref++ == 0) {
+      assert(_parent);
+      _root->_lru_list.remove(&_lru);
+    }
+  }
+
+  void CInode::put()
+  {
+    if (--_ref == 0) {
+      if (_parent)
+        _root->_lru_list.push_back(&_lru);
+      else
+        delete this;
+    }
+  }
+
+  int CInode::add(const std::string &name, inodeno_t ino, CInode **result)
+  {
+    if (_subdirs.count(name))
+      return -EEXIST;
+
+    if (_root->_cache.count(ino))
+      return -EEXIST;
+
+    CInode *sub = new CInode();
+    sub->_root = _root;
+    sub->_parent = this;
+    sub->_ino = ino;
+    sub->_name = name;
+    _subdirs[name] = sub;
+    _root->_cache[ino] = sub;
+    get();
+
+    if (result)
+      *result = sub;
+    else
+      sub->put();
+
+    return 0;
+  }
+
+  int CInode::remove(const std::string &name)
+  {
+    map<string, CInode*>::iterator pos = _subdirs.find(name);
+    if (pos == _subdirs.end())
+      return -ENOENT;
+
+    CInode *inode = pos->second;
+
+    inode->get();
+
+    assert(inode->_name == name);
+    inode->_parent = NULL;
+    _subdirs.erase(pos);
+    put();
+
+    inode->put();
+
+    return 0;
+  }
+
+  int CInode::rename(const std::string &oldname, const std::string &newname)
+  {
+    map<string, CInode*>::iterator pos = _subdirs.find(oldname);
+    if (pos == _subdirs.end())
+      return -ENOENT;
+    if (_subdirs.count(newname))
+      return -EEXIST;
+
+    CInode *inode = pos->second;
+    assert(inode->_name == oldname);
+    _subdirs.erase(pos);
+    _subdirs[newname] = inode;
+    inode->_name = newname;
+
+    return 0;
+  }
+
+  const map<string, CInode *>& CInode::subdirs()
+  {
+    return _subdirs;
+  }
+
+  CRoot::CRoot()
+  {
+    _root = this;
+    _parent = NULL;
+    _ino = ROOT_INO;
+    _cache[ROOT_INO] = this;
+  }
+
+  CRoot::~CRoot()
+  {
+    assert(_cache.size() == 1);
+  }
+
+  void CRoot::trim(int count)
+  {
+    while (!_lru_list.empty() && count) {
+      CInode *inode = _lru_list.front();
+      inode->get();
+      int r = inode->parent()->remove(inode->name());
+      assert(r == 0);
+      inode->put();
+
+      --count;
+    }
+  }
 };
 
