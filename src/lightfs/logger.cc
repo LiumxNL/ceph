@@ -467,6 +467,9 @@ namespace lightfs
   Logger::Transaction::~Transaction()
   {
     Mutex::Locker lock(_logger._writer_mutex);
-    --_logger._transaction;
+    if (--_logger._transaction == 0 &&
+        _logger._writer_queue >= 0 &&
+        _logger._writer_count >= 1024)
+      _logger.pend_flush(0);
   }
 };
