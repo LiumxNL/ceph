@@ -113,6 +113,21 @@ namespace lightfs
     {
       decode(ATTR_ALL, p);
     }
+
+    inode_t & operator= (inode_t &right)
+    {
+      ctime = right.ctime;
+      atime = right.atime;
+      mtime = right.mtime;
+      size = right.size;
+      max_size = right.max_size;
+      truncate_size = right.truncate_size;
+      mode = right.mode;
+      uid = right.uid;
+      gid = right.gid;
+
+      return *this;
+    }
   };
 };
 

@@ -3,6 +3,10 @@
 #include "test.hpp"
 #include "cls/lightfs/cls_lightfs_client.h"
 #include "include/lightfs_types.hpp"
+#include "lightfs_ctx.h"
+#include "lightfs_fuse.hpp"
+
+#include <sys/types.h>
 
 using namespace std;
 using namespace lightfs;
@@ -57,11 +61,13 @@ namespace lightfs {
     cout << ">>>test_fs:" << endl;
     int bits = 1;
     InoGenerator inogen(*ioctx);
+    cout << "after inogen" << endl;
     if (inogen.open() < 0) {
       inogen.init_pool(bits);
       inogen.open();
     }
-
+   
+    cout << "before create Lightfs " << endl;
     Lightfs fs(ioctx, &inogen);
     /*
     test case : 
@@ -73,13 +79,22 @@ namespace lightfs {
        /     \
      g1=101 g2=102 
    */
+
+    cout << "before create_root" << endl;
     if (!fs.create_root())
       return;
 
     PART_LINE("mkdir");
-    TEST_EQUAL(fs.mkdir(0, "dir1"), 0);
-    TEST_EQUAL(fs.mkdir(0, "dir2"), 0);
-    TEST_EQUAL(fs.mkdir(0, "dir3"), 0);
+    mode_t mode = S_IFMT & S_IFDIR;
+    inode_t inode;
+    inode.mode = mode;
+    TEST_EQUAL(fs.mkdir(0, "dir1", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(0, "dir2", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(0, "dir3", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(0, "avatar", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(0, "batman", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(0, "transfrom4", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(0, "spiderman", NULL, inode), 0);
 
     string root;
     string dir1;
@@ -100,26 +115,76 @@ namespace lightfs {
     PART_LINE("rmdir");
     TEST_EQUAL(fs.rmdir(0, "dir3"), 0);
     ls(ioctx, root);
+
+    PART_LINE("lookup");
+    inodeno_t l_ino = -1;
+    TEST_EQUAL(fs.lookup(0, "avatar", l_ino), 0);
+    cout << "avatar.ino = " << hex << l_ino << dec << endl;
+
+    PART_LINE("rename");
+    TEST_EQUAL(fs.rename(0, "avatar", "AVATAR"), 0);
+    ls(ioctx, root);
+
+    PART_LINE("open");
+    int flags = O_RDWR|O_CREAT;
+    inode_t myinode;
+    Fh fh;
+    fh.inode = &myinode;
+    cout << "open ino: " << hex << l_ino << dec << endl;
+    TEST_EQUAL(fs.open(l_ino, flags, &fh), 0);
+    print_fh(fh);    
+
+    PART_LINE("write");
+    off_t off = 100;
+    off_t len = (1<<22);
+    string data_obj(len, 'x');
+    cout << "length = " << data_obj.length() << endl;
+    TEST_EQUAL(fs.write(&fh, off, len, data_obj.c_str()), 0);
+  }
+
+  
+
+  void test_fuse(IoCtx *ioctx, int argc, char *argv[])
+  {
+    cout << ">>>fuse_entry:" << endl;
+    int bits = 1;
+    InoGenerator inogen(*ioctx);
+    cout << "after inogen" << endl;
+    if (inogen.open() < 0) {
+      inogen.init_pool(bits);
+      inogen.open();
+    }
+
+    cout << "before create Lightfs " << endl;
+    Lightfs fs(ioctx, &inogen);
+
+    cout << "before create_root" << endl;
+    if (!fs.create_root())
+      return;
+   
+    LightfsFuse lfuse(&fs);
+    lfuse.init(argc, argv); 
   }
 
 }
 
-int main(int argc, const char *argv[])
+int main(int argc, char *argv[])
 {
   int r;
-  Rados rados;
-  IoCtx ioctx;
+  LightfsCtx lctx;
+  //Rados rados;
+  //IoCtx ioctx;
 
-  r = init_ceph_cluster(rados, ioctx);
+  //r = init_ceph_cluster(rados, ioctx);
+  r = lctx.init_ctx();
   if (r < 0)
     goto err;
 
-  test_inogen(&ioctx);
-  test_fs(&ioctx);
-
+  //test_inogen(&(lctx._ioctx));
+  //test_fs(&(lctx._ioctx));
+  test_fuse(&lctx._ioctx, argc, argv);
 err:
-  ioctx.close();
-  rados.shutdown();
+  lctx.destroy_ctx();
   return 0;
 
 }

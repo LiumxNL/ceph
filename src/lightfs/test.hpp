@@ -64,4 +64,15 @@ namespace lightfs {
     cout << ", " << inode.gid ;
     cout << "]" << endl;
   }
+
+  void print_fh(Fh &fh)
+  {
+    cout << "[" << fh.ino;
+    cout << ", ";
+    print_inode(*(fh.inode));
+    cout << ", " << fh.pos;
+    cout << ", " << fh.mode;
+    cout << ", " << fh.flags;
+    cout << "]" << endl;
+  }
 }

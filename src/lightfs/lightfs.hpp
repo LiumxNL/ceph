@@ -3,6 +3,7 @@
 
 #include <string>
 #include <map>
+#include <fuse/fuse_lowlevel.h>
 
 #include "common/Mutex.h"
 
@@ -10,6 +11,7 @@
 
 #include "include/rados/librados.hpp"
 #include "include/lightfs_types.hpp"
+#include "include/stat.h"
 
 namespace lightfs
 {
@@ -75,49 +77,73 @@ namespace lightfs
   };
 
   void get_inode_oid(inodeno_t ino, std::string &oid);
-  
-  class CInode
-  {
-  public:
-    inodeno_t _ino; //inode number
-    inode_t _inode; //metadata
-    int cache_flag;
-    std::map<std::string, CInode *> subs_cache;
-    CInode(inodeno_t ino, inode_t &inode, int flag) :
-      _ino(ino), _inode(inode), cache_flag(flag)
-    {}
-    ~CInode() {}
+  void get_file_oid(inodeno_t ino, off_t off, std::string &oid);
+
+  struct Fh {
+    inodeno_t ino;
+    inode_t *inode;
+    
+    off_t pos;
+    int mode;
+    
+    int flags;
+    
+    Fh() : ino(-1), inode(NULL), pos(0), mode(0), flags(0) {}
   };
   
   class Lightfs
   {
   private:
     bool has_root;
+    long unsigned order; //object size = 1 << order;
   public:
     std::map<inodeno_t, CInode *> _inode_cache;
     librados::IoCtx *_ioctx;
     InoGenerator *_ino_gen;
     
-    Lightfs(librados::IoCtx *ctx, InoGenerator *ino_gen) :
-      has_root(false), _inode_cache(), _ioctx(ctx), _ino_gen(ino_gen)
+    Lightfs(librados::IoCtx *ctx, InoGenerator *ino_gen, const long unsigned myorder = 22) :
+      has_root(false), order(myorder), _inode_cache(), _ioctx(ctx), _ino_gen(ino_gen)
     {}
     ~Lightfs() {}
   
+    /* helper */
+    void file_to_objects(off_t file_off, off_t file_len, std::map<off_t, std::pair<off_t, off_t> > &objects);
+    void objects_to_file(std::map<off_t, std::pair<off_t, off_t> > objects, off_t &off, off_t &len);
+    void fill_stat(struct stat *attr, inodeno_t ino, inode_t inode);
+
     bool create_root();
     
     /* inode ops */
-    int do_mkdir(inodeno_t pino, const char *name, inodeno_t myino);
-    int mkdir(inodeno_t pino, const char *name);
+    int do_mkdir(inodeno_t pino, const char *name, inodeno_t myino, inode_t &inode);
+    int mkdir(inodeno_t pino, const char *name, inodeno_t *ino, inode_t &inode);
     int readdir(inodeno_t ino, std::map<std::string, inodeno_t> &result);
     int rmdir(inodeno_t pino, const char *name);
     int lookup(inodeno_t pino, const char *name, inodeno_t &ino);
     int rename(inodeno_t pino, const char *oldname, const char *newname);
+    int getattr(inodeno_t myino, inode_t &inode);
     
     /* file ops */
-    int open();
-    int read();
-    int write();
+    int open(inodeno_t myino, int flags, Fh *fh);
+    int lseek(Fh *fh, off_t off, int whence);
+    int read(Fh *fh, off_t off, off_t len, bufferlist *bl);
+    int write(Fh *fh, off_t off, off_t len, const char *data);
     int truncate();
+
+    /* fuse lowlevel ops */
+    int ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, 
+		struct stat *attr);
+    int ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
+		struct fuse_file_info *fi);
+    int ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name);
+    int ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
+		struct stat *attr);
+    int ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name, 
+		fuse_ino_t newparent, const char *newname);
+    int ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
+    int ll_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, 
+		struct fuse_file_info *fi);
+    int ll_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t size, off_t off, 
+ 		struct fuse_file_info *fi);
   };
 };
 
