@@ -45,7 +45,7 @@ namespace lightfs
       string oid;
       get_oid(i, oid);
 
-      r = cls_client::create_seq(&_ioctx, oid, i ? 0 : 1);
+      r = cls_client::create_seq(&_ioctx, oid, i ? 0 : 2);
       if (r < 0)
         return r;
     }
@@ -260,8 +260,8 @@ namespace lightfs
   void get_inode_oid(inodeno_t ino, std::string &oid)
   {
     char oid_str[32] = {'\0'};
-    if (ino == 0) { 
-      oid = "inode.0";
+    //ino starts with 1 
+    if (ino < 1) { 
       return;
     }
     snprintf(oid_str, sizeof(oid_str), "inode.%016lX", ino);
@@ -375,7 +375,8 @@ namespace lightfs
       return true;
     int r = -1;
     inode_t inode;
-    std::string oid("inode.0");
+    std::string oid;
+    get_inode_oid(1, oid);
 
     r = cls_client::create_inode(_ioctx, oid, true, inode);
     if (r < 0 && r != -EEXIST) {

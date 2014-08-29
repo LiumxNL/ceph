@@ -33,6 +33,7 @@ namespace lightfs {
     cout << "st_atime:" << st->st_atime << endl;
     cout << "st_mtime:" << st->st_mtime << endl;
     cout << "st_ctime:" << st->st_ctime << endl;
+    cout << "]" << endl;
   }
   
   static void fuse_ll_init(void *userdata, struct fuse_conn_info* conn)
@@ -63,29 +64,19 @@ namespace lightfs {
   static void fuse_ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name);
   static void fuse_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
   {
-///*
     int r = -1;
     struct fuse_entry_param e;
     memset(&e, 0, sizeof(e));
  
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
     r = lfuse->lfs->ll_lookup(req, parent, name, &e.attr);
-    if (r == 0)
+    if (r == 0) {
+      e.ino = e.attr.st_ino;
       fuse_reply_entry(req, &e);
-    else
+    }
+    else {
       fuse_reply_err(req, -r);
-//*/
-/*
-    struct fuse_entry_param e;
-    memset(&e,0,sizeof(e));
-    e.ino = 2;
-    e.attr.st_ino = e.ino;
-    e.attr.st_mode = S_IFREG | 0644;
-    e.attr_timeout = 1.0;
-    e.entry_timeout = 1.0;
-    //fuse_reply_entry(req,&e);
-     fuse_reply_err(req,2);
-*/
+    }
   }
 
   static void fuse_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
