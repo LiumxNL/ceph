@@ -13,6 +13,9 @@
 #include "include/lightfs_types.hpp"
 #include "include/stat.h"
 
+#define ROOT_INO 1
+#define ROOT_PARENT 2
+
 namespace lightfs
 {
   class InoGenerator
@@ -90,6 +93,13 @@ namespace lightfs
     
     Fh() : ino(-1), inode(NULL), pos(0), mode(0), flags(0) {}
   };
+
+  struct dir_buffer {
+    inodeno_t ino;
+    std::map<std::string, inodeno_t> buffer;
+    dir_buffer() : ino(0), buffer() {}
+    ~dir_buffer() {}
+  };
   
   class Lightfs
   {
@@ -110,13 +120,15 @@ namespace lightfs
     void file_to_objects(off_t file_off, off_t file_len, std::map<off_t, std::pair<off_t, off_t> > &objects);
     void objects_to_file(std::map<off_t, std::pair<off_t, off_t> > objects, off_t &off, off_t &len);
     void fill_stat(struct stat *attr, inodeno_t ino, inode_t inode);
+    void fill_dirent(struct dirent *ent, inodeno_t ino, off_t next_off, int type, const char *name);
+    void add_dirent(fuse_req_t req, struct dirent *ent, struct stat *stbuf, int stmask, off_t next_off);
+
 
     bool create_root();
     
     /* inode ops */
     int do_mkdir(inodeno_t pino, const char *name, inodeno_t myino, inode_t &inode);
     int mkdir(inodeno_t pino, const char *name, inodeno_t *ino, inode_t &inode);
-    int readdir(inodeno_t ino, std::map<std::string, inodeno_t> &result);
     int rmdir(inodeno_t pino, const char *name);
     int lookup(inodeno_t pino, const char *name, inodeno_t &ino);
     int rename(inodeno_t pino, const char *oldname, const char *newname);
@@ -128,22 +140,28 @@ namespace lightfs
     int read(Fh *fh, off_t off, off_t len, bufferlist *bl);
     int write(Fh *fh, off_t off, off_t len, const char *data);
     int truncate();
+    int opendir(inodeno_t ino, dir_buffer *d_buffer);
+    int readdir(inodeno_t ino, std::map<std::string, inodeno_t> &result);
+    int releasedir(dir_buffer *d_buffer);
 
     /* fuse lowlevel ops */
     int ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, 
 		struct stat *attr);
-    int ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
-		struct fuse_file_info *fi);
     int ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name);
     int ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		struct stat *attr);
     int ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name, 
 		fuse_ino_t newparent, const char *newname);
+    int ll_getattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr);
     int ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
     int ll_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, 
 		struct fuse_file_info *fi);
     int ll_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t size, off_t off, 
  		struct fuse_file_info *fi);
+    int ll_opendir(fuse_req_t req, fuse_ino_t ino, dir_buffer **d_buffer);
+    int ll_readdir(fuse_req_t req, fuse_ino_t ino, off_t off, off_t size,
+		off_t *fill_size, char *buf, dir_buffer *d_buffer);
+    int ll_releasedir(fuse_req_t req, dir_buffer *d_buffer);
   };
 };
 

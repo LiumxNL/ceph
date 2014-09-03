@@ -88,41 +88,39 @@ namespace lightfs {
     mode_t mode = S_IFMT & S_IFDIR;
     inode_t inode;
     inode.mode = mode;
-    TEST_EQUAL(fs.mkdir(0, "dir1", NULL, inode), 0);
-    TEST_EQUAL(fs.mkdir(0, "dir2", NULL, inode), 0);
-    TEST_EQUAL(fs.mkdir(0, "dir3", NULL, inode), 0);
-    TEST_EQUAL(fs.mkdir(0, "avatar", NULL, inode), 0);
-    TEST_EQUAL(fs.mkdir(0, "batman", NULL, inode), 0);
-    TEST_EQUAL(fs.mkdir(0, "transfrom4", NULL, inode), 0);
-    TEST_EQUAL(fs.mkdir(0, "spiderman", NULL, inode), 0);
+    inodeno_t pino = ROOT_INO;
+
+    TEST_EQUAL(fs.mkdir(pino, "$", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(pino, ".+", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(pino, "...", NULL, inode), 0);
+  
+    TEST_EQUAL(fs.mkdir(pino, "dir1", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(pino, "dir2", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(pino, "dir3", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(pino, "avatar", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(pino, "batman", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(pino, "transfrom4", NULL, inode), 0);
+    TEST_EQUAL(fs.mkdir(pino, "spiderman", NULL, inode), 0);
 
     string root;
-    string dir1;
-    string dir2;
-    string dir3;
-    string sub1;
-    get_inode_oid(0, root);
-    get_inode_oid(1, dir1);
-    get_inode_oid(2, dir2);
-    get_inode_oid(3, dir3);
-    get_inode_oid(0x11, sub1);
+    get_inode_oid(ROOT_INO, root);
 
     PART_LINE("readdir");
     std::map<std::string, inodeno_t> result;
-    TEST_EQUAL(fs.readdir(0, result), 0);
+    TEST_EQUAL(fs.readdir(pino, result), 0);
     ls_map(result);
 
     PART_LINE("rmdir");
-    TEST_EQUAL(fs.rmdir(0, "dir3"), 0);
+    TEST_EQUAL(fs.rmdir(pino, "dir3"), 0);
     ls(ioctx, root);
 
     PART_LINE("lookup");
     inodeno_t l_ino = -1;
-    TEST_EQUAL(fs.lookup(0, "avatar", l_ino), 0);
+    TEST_EQUAL(fs.lookup(pino, "avatar", l_ino), 0);
     cout << "avatar.ino = " << hex << l_ino << dec << endl;
 
     PART_LINE("rename");
-    TEST_EQUAL(fs.rename(0, "avatar", "AVATAR"), 0);
+    TEST_EQUAL(fs.rename(pino, "avatar", "AVATAR"), 0);
     ls(ioctx, root);
 
     PART_LINE("open");
@@ -162,6 +160,7 @@ namespace lightfs {
     if (!fs.create_root())
       return;
    
+    cout << "before LightfsFuse" << endl;
     LightfsFuse lfuse(&fs);
     lfuse.init(argc, argv); 
   }

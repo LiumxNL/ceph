@@ -45,7 +45,7 @@ namespace lightfs
       string oid;
       get_oid(i, oid);
 
-      r = cls_client::create_seq(&_ioctx, oid, i ? 0 : 2);
+      r = cls_client::create_seq(&_ioctx, oid, i ? 0 : (ROOT_PARENT+1));
       if (r < 0)
         return r;
     }
@@ -368,6 +368,24 @@ namespace lightfs
     stat_set_mtime_nsec(st, inode.mtime.nsec());
   }
 
+  void Lightfs::fill_dirent(struct dirent *ent, inodeno_t ino, off_t next_off, int type, const char *name)
+  {
+    int len = strlen(name);
+
+    ent->d_ino = ino;
+    ent->d_off = next_off;
+    ent->d_type = IFTODT(type);
+
+    ent->d_reclen = len > 255 ? 255 : len;
+    memcpy(ent->d_name, name, ent->d_reclen);
+    ent->d_name[ent->d_reclen] = '\0';
+  }
+
+  void Lightfs::add_dirent(fuse_req_t req, struct dirent *ent, struct stat *stbuf, int stmask, off_t next_off)
+  {
+    //fuse_add_direntry(req, );
+  }
+
   /*lightfs member*/
   bool Lightfs::create_root()
   {
@@ -376,14 +394,35 @@ namespace lightfs
     int r = -1;
     inode_t inode;
     std::string oid;
-    get_inode_oid(1, oid);
+    get_inode_oid(ROOT_INO, oid);
+  
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+
+    inode.ctime.set_from_timeval(&tv);
+    inode.atime.set_from_timeval(&tv);
+    inode.mtime.set_from_timeval(&tv);
+
+    char buf[20];
+    int t = snprintf(buf, sizeof(buf), "I.%08lX", -1);
+    inode.size = sizeof(inode) + sizeof("N.") + sizeof("N..") 
+                + 2 * sizeof(inodeno_t) + 2 * t + sizeof(".") + sizeof("..");
+
+
+    inode.mode = S_IFDIR;
 
     r = cls_client::create_inode(_ioctx, oid, true, inode);
-    if (r < 0 && r != -EEXIST) {
+    if (r < 0 && r != -EEXIST) 
       return false;
-    }
+    r = cls_client::link_inode(_ioctx, oid, "..", ROOT_PARENT);	
+    if (r < 0 && r != -EEXIST) 
+      return false;
+    r = cls_client::link_inode(_ioctx, oid, ".", ROOT_INO);
+    if (r < 0 && r != -EEXIST) 
+      return false;
     has_root = true;
-    return true;
+
+    return true;  
   }
 
   /* inode ops */  
@@ -401,13 +440,22 @@ namespace lightfs
     if (r < 0)
         return r;
     
-    // 2. add <N.name, myino> & <I.myino, name> entry to parent  
+    // 2. add <N.name, myino> & <I.myino, name> entry to parent, and add "..", "." to child dir 
     r = cls_client::link_inode(_ioctx, poid, name, myino);
+    if (r < 0)
+      goto clean;
+    r = cls_client::link_inode(_ioctx, oid, "..", pino); 
+    if (r < 0)
+      goto clean;
+    r = cls_client::link_inode(_ioctx, oid, ".", myino); 
+    if (r < 0)
+      goto clean;
+
+  clean:
     // 3. if 2 failed, remove child inode
     if (r < 0) {
-      r = cls_client::remove_inode(_ioctx, oid);
-      if (r < 0)
-	return r; 
+      cls_client::remove_inode(_ioctx, oid);
+      return r;
     } 
     // if 2 or 3 is interrupted(network disconnnected), log will clean(recycle) child inode
 
@@ -432,15 +480,6 @@ namespace lightfs
     return 0;
   }
 
-  int Lightfs::readdir(inodeno_t ino, std::map<std::string, inodeno_t> &result)
-  {
-    int r = -1;
-    long unsigned max_return = (uint64_t)-1;
-
-    string oid;
-    get_inode_oid(ino, oid);
-    return cls_client::list_inode(_ioctx, oid, "", max_return, &result);
-  }
 
   int Lightfs::rmdir(inodeno_t pino, const char *name)
   {
@@ -583,7 +622,45 @@ namespace lightfs
     return 0;
   }
 
+  int Lightfs::opendir(inodeno_t ino, dir_buffer *d_buffer)
+  {
+    d_buffer->ino = ino;
+    return 0;
+  }
+
+  int Lightfs::readdir(inodeno_t ino, std::map<std::string, inodeno_t> &result)
+  {
+    int r = -1;
+    long unsigned max_return = (uint64_t)-1;
+
+    string oid;
+    get_inode_oid(ino, oid);
+    return cls_client::list_inode(_ioctx, oid, "", max_return, &result);
+  }
+
+  int Lightfs::releasedir(dir_buffer *d_buffer)
+  {
+    if (d_buffer != NULL) {
+      cout << "d_buffer != NULL " << endl;
+      delete d_buffer;
+      d_buffer = NULL;
+    }
+    return 0;
+  }
+
   /*fuse lowlevel ops*/
+
+  int Lightfs::ll_getattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr)
+  {
+    int r = -1;
+    inode_t inode;
+    r = getattr(ino, inode);
+    cout << "ll_getattr: getattr = " << r << endl;
+    if (r < 0)
+      return r;
+    fill_stat(attr, ino, inode);
+    return 0;
+  }
 
   int Lightfs::ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode,  
                 struct stat *attr)
@@ -600,6 +677,17 @@ namespace lightfs
     inode.atime.set_from_timeval(&tv); 
     inode.mtime.set_from_timeval(&tv); 
 
+    /*
+	dir size:
+	struct inode_t
+	<N.. ino>  & <I.ino .>
+	<N... ino> & <I.ino ..>
+    */
+    char buf[20];
+    int t = snprintf(buf, sizeof(buf), "I.%08lX", -1);
+    inode.size = sizeof(inode) + sizeof("N.") + sizeof("N..") 
+		+ 2 * sizeof(inodeno_t) + 2 * t + sizeof(".") + sizeof("..");
+
     inode.mode = mode | S_IFDIR;
     inode.uid = fctx->uid;
     inode.gid = fctx->gid;    
@@ -612,15 +700,143 @@ namespace lightfs
     return 0;
   }
 
+  int Lightfs::ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
+  {
+    return rmdir(parent, name);
+  }
+  
+  int Lightfs::ll_opendir(fuse_req_t req, fuse_ino_t ino, dir_buffer **d_buf)
+  {
+    if (d_buf == NULL)
+      return -1;
+    *d_buf = new dir_buffer();
+    return opendir(ino, *d_buf);
+  }
+
+  int Lightfs::ll_readdir(fuse_req_t req, fuse_ino_t ino, off_t off, off_t size,
+		off_t *f_size, char *buf, dir_buffer *d_buffer)
+  {
+    cout << "ll_readdir" << endl;
+
+    int r = -1;
+    inode_t inode;
+    struct dirent ent;
+    struct stat st;
+    memset(&ent, 0, sizeof(ent));
+    memset(&ent, 0, sizeof(st));
+
+    //to fix: buffer update
+    //get all dir entries: <name, ino>
+    cout << "before readdir" << endl;
+    if (d_buffer->buffer.size() == 0) {
+      r = readdir(ino, d_buffer->buffer);
+      if (r < 0)
+	return r;
+    }
+    
+    *f_size = 0;
+    off_t fill_size = 0;
+    off_t ent_size = 0;
+    off_t remind_size = size;
+    off_t next_off_size = 0;
+    off_t next_off = off;
+    off_t cur_off = off;
+    off_t pos = off;
+    off_t entry_count = d_buffer->buffer.size();
+    char *ptr = buf;   
+    const char *entry = NULL;
+
+    inodeno_t ent_ino = 0;
+
+    std::map<std::string, inodeno_t>::iterator p = d_buffer->buffer.begin();
+    std::map<std::string, inodeno_t>::iterator end = d_buffer->buffer.end();
+    cout << "ll_readdir: off = " << off << ", entry_count = " << entry_count << endl;
+    //seek to off
+    while(pos--)
+      ++p;
+
+    //traverse map<string, inodeno_t> at off
+    for (; p != end; ++p) {
+      entry = p->first.c_str();
+      //get the dir entry size
+      ent_size = fuse_add_direntry(req, NULL, 0, entry, NULL, 0);
+      cout << "ent_size = " << ent_size << endl;
+      next_off_size += ent_size;
+      if (next_off_size > remind_size)
+        break;
+      next_off++;
+      if (next_off > entry_count)
+        break;
+      printf("%s, remind_size = %ld, fill_size = %ld,  cur_off = %ld, next_off = %ld, ptr = %p\n", 
+        entry, remind_size, fill_size, cur_off, next_off, ptr);
+   
+      ent_ino = p->second;
+      cout << "<" << entry << ", " << hex << ent_ino << dec << ">" << endl;
+      if (ent_ino == ROOT_PARENT) {
+	inode.mode = S_IFDIR;	
+      } else { 
+        r = getattr(ent_ino, inode);
+        cout << "getattr = " << r << endl; 
+        if (r < 0)
+          return r; 
+      }
+      fill_stat(&st, ent_ino, inode);
+
+      fuse_add_direntry(req, ptr, remind_size, entry, &st, next_off);
+      fill_size += ent_size;
+      remind_size -= ent_size;
+      ptr += ent_size;
+      cur_off = next_off;
+    }
+    
+    *f_size = fill_size;
+/*
+    cout << "after readdir, r = " << r << endl;
+    if (d_buffer->buffer.size() <= off + 1 )
+      return -1;
+    //to fix : ".." and "."
+    //add dirent : pos = off
+    std::map<std::string, inodeno_t>::iterator p = d_buffer->buffer.begin();
+    off_t pos = off;
+    while(pos--)
+      ++p;
+
+    cout << "<" << p->first << ", " << p->second << endl;
+   
+    r = getattr(ino, inode);
+    if (r < 0)
+      return r; 
+    fill_stat(&st, ino, inode);
+    
+    //fill_dirent(&ent, ino, off+1, );
+    r = fuse_add_direntry(req, buf, size, p->first.c_str(), &st, off+1);
+    cout << "fuse_add_direntry = " << r << endl;
+    if (r < 1)
+      return -1;
+*/    
+    return 0;
+  }
+
+  int Lightfs::ll_releasedir(fuse_req_t req, dir_buffer *d_buffer)
+  {
+    return releasedir(d_buffer);
+  }
+
   int Lightfs::ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
                 struct stat *attr)
   {
+    cout << "ll_lookup: parent = " << parent << endl;
     int r = -1;
     inodeno_t ino = -1;
 
-    r = lookup(parent, name, ino);
-    if (r < 0)
-      return r;
+    if (parent != ROOT_PARENT) {
+      r = lookup(parent, name, ino);
+      cout << "lookup = " << r << endl;
+      if (r < 0)
+        return r;
+    } else {
+      ino = ROOT_INO;
+    }
     
     inode_t inode;
     r = getattr(ino, inode);

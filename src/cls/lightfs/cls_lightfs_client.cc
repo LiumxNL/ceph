@@ -206,7 +206,6 @@ namespace lightfs {
         bufferlist::iterator p = outbl.begin();
         std::map<std::string, inodeno_t> res;
         ::decode(res, p);
-	cout << "res.size = " << res.size() << endl;
         std::map<std::string, inodeno_t>::iterator ptr = res.begin();
     	for (; ptr != res.end(); ++ptr) {
 	  //N.name -> name  "N.name".substr(2) = "name"

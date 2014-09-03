@@ -53,28 +53,88 @@ namespace lightfs {
     if (r == 0) {
       e.ino = e.attr.st_ino;
       fuse_reply_entry(req, &e);
-    }
-    else {
+    } else {
       fuse_reply_err(req, -r);
     }
   }
 
+
+  static void fuse_ll_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+  {
+    int r = -1;
+    
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req); 
+    void *d_buf;
+    r = lfuse->lfs->ll_opendir(req, ino, (dir_buffer **)&d_buf);
+    if (r == 0) {
+      fi->fh = (long)d_buf;
+      fuse_reply_open(req, fi);     
+    } else {
+      fuse_reply_err(req, -r);
+    } 
+  }
+
   static void fuse_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
-                         struct fuse_file_info *fi);
-  static void fuse_ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name);
+                         struct fuse_file_info *fi)
+  {
+    /* off : offset in direntry stream ...*/
+    int r = -1;
+    char *buf = new char[size];
+
+    off_t fill_size = 0;
+    cout << "fuse_ll_readdir: off = " << off << endl;
+
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req); 
+    dir_buffer *d_buffer = (dir_buffer *)fi->fh;
+    
+    r = lfuse->lfs->ll_readdir(req, ino, off, size, &fill_size, buf, d_buffer);       
+    cout << "fuse_ll_readdir: fill_size = " << fill_size << endl;
+
+    if (r == 0) {
+      fuse_reply_buf(req, buf, fill_size);
+    } else {
+      fuse_reply_buf(req, NULL, 0);
+    }
+
+    delete []buf;
+  }
+
+  static void fuse_ll_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+  { 
+    int r = -1;
+    if (!fi) {
+      fuse_reply_err(req, 1);
+      return;
+    } 
+    dir_buffer *d_buffer = (dir_buffer *)fi->fh;
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_releasedir(req, d_buffer);
+    fuse_reply_err(req, -r);
+  }  
+
+  static void fuse_ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
+  {
+    int r = -1;
+    
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_rmdir(req, parent, name); 
+    fuse_reply_err(req, -r);
+  }
+
   static void fuse_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
   {
     int r = -1;
     struct fuse_entry_param e;
     memset(&e, 0, sizeof(e));
  
+    cout << "fuse_ll_lookup: parent = " << hex << parent << dec << " name = " << name << endl;
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
     r = lfuse->lfs->ll_lookup(req, parent, name, &e.attr);
+    cout << "fuse_ll_lookup , ll_lookup = " << r << endl;
     if (r == 0) {
       e.ino = e.attr.st_ino;
       fuse_reply_entry(req, &e);
-    }
-    else {
+    } else {
       fuse_reply_err(req, -r);
     }
   }
@@ -82,6 +142,24 @@ namespace lightfs {
   static void fuse_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
                         fuse_ino_t newparent, const char *newname)
   {}
+
+  static void fuse_ll_getattr(fuse_req_t req, fuse_ino_t ino,
+			struct fuse_file_info *fi)
+  {
+    int r = 0;
+    cout << "fuse_ll_getattr, ino = " << ino << endl;
+    struct stat attr;
+    memset(&attr, 0, sizeof(attr));
+
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_getattr(req, ino, &attr);
+
+    if (r == 0) {
+      fuse_reply_attr(req, &attr, 0);
+    } else {
+      fuse_reply_err(req, -r);
+    }
+  }
 
   static void fuse_ll_open(fuse_req_t req, fuse_ino_t ino,
                       struct fuse_file_info *fi)
@@ -100,13 +178,13 @@ namespace lightfs {
   destroy:0, 
   lookup:fuse_ll_lookup,
   forget:0,
-  getattr:0,
+  getattr:fuse_ll_getattr,
   setattr:0,
   readlink:0,
   mknod:0,
   mkdir:fuse_ll_mkdir,
   unlink:0,
-  rmdir:0,
+  rmdir:fuse_ll_rmdir,
   symlink:0,
   rename:0,
   link:0,
@@ -116,9 +194,9 @@ namespace lightfs {
   flush:0,
   release:0,
   fsync:0,
-  opendir:0,
-  readdir:0,
-  releasedir:0,
+  opendir:fuse_ll_opendir,
+  readdir:fuse_ll_readdir,
+  releasedir:fuse_ll_releasedir,
   fsyncdir:0,
   statfs:0,
   setxattr:0,
