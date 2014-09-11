@@ -439,7 +439,7 @@ namespace lightfs
     get_inode_oid(myino, oid);
     get_inode_oid(pino, poid);
 
-    // 1. generate ino and create child inode 
+    // 1. create child inode 
     r = cls_client::create_inode(_ioctx, oid, true, inode);
     if (r < 0)
         return r;
@@ -582,6 +582,47 @@ namespace lightfs
     
   }
 
+  int Lightfs::create(inodeno_t pino, const char *name, int mode, int flags, 
+		inodeno_t &ino, Fh *fh, int uid, int gid)
+  {
+    cout << "create:" << name << " pino = " << pino << endl;
+    int r = -1;
+    string poid, oid;
+    
+    _ino_gen->generate(ino); 
+    cout << "generate ino = " << hex << ino << dec << endl;
+    get_inode_oid(ino, oid);
+    get_inode_oid(pino, poid);
+
+    inode_t *inodep = new inode_t();
+    if (inodep == NULL)
+      return -ENOMEM;
+    inodep->ctime = lightfs_now();
+    inodep->mode = mode;
+    inodep->uid = uid;
+    inodep->gid = gid;
+
+    r = cls_client::create_inode(_ioctx, oid, true, *inodep);
+    if (r < 0) 
+      goto err;
+
+    r = cls_client::link_inode(_ioctx, poid, name, ino);
+    if (r < 0)
+      goto err;
+
+    fh->ino = ino;
+    fh->inode = inodep;
+    fh->pos = 0;
+    fh->mode = mode;
+    fh->flags = flags;
+    return 0;
+
+  err:
+    delete inodep;
+    inodep = NULL;
+    return r;
+  }
+
   int Lightfs::unlink(inodeno_t pino, const char *name)
   {
     //to fix: transaction: ops on {poid, oid, file_oid} 3 objects
@@ -637,17 +678,12 @@ namespace lightfs
     inode_t *inodep = new inode_t();  
       
     int r = -1;
-    cout << "before get_inode" << endl;
     r = cls_client::get_inode(_ioctx, oid, *inodep);
-    cout << "get_inode: r = " << r << endl;
     if (r < 0) {
       delete inodep;
       inodep = NULL;
       return r;
     }
-
-    cout << "flags:= " << oct << flags << dec << endl;
-    cout << "flags & O_ACCMODE:= " << oct << (flags & O_ACCMODE) << dec << endl;
     
     fh->ino = myino;
     fh->inode = inodep;
@@ -1011,6 +1047,8 @@ namespace lightfs
     int r = -1;
     inode_t inode;
     inodeno_t ino;
+    if (fhp == NULL)
+      return -1;
     
     if (flags & O_CREAT == 0) {
       cout << "ll_create: flags is not O_CREAT, failed" << endl;
@@ -1032,8 +1070,12 @@ namespace lightfs
         *fhp = new Fh();
 	if (*fhp == NULL) 
 	  return -ENOMEM;
+
+        const struct fuse_ctx *fctx = fuse_req_ctx(req);
+        int uid = fctx->uid;
+  	int gid = fctx->gid;
         
- 	//r = create();
+ 	r = create(parent, name, mode, flags, ino, *fhp, uid, gid);
 	if (r < 0) {
 	  if (fhp && *fhp) {
 	    delete *fhp;
@@ -1041,10 +1083,10 @@ namespace lightfs
 	  }
 	  return r;
         }
+        fill_stat(attr, ino, *((*fhp)->inode));
       }
     }
-   
-    
+    return 0;
   }
 
   int Lightfs::ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)

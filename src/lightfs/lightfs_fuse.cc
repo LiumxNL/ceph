@@ -169,7 +169,7 @@ namespace lightfs {
 			struct fuse_file_info *fi)
   {
     int r = 0;
-    cout << "fuse_ll_getattr, ino = " << ino << endl;
+    cout << "fuse_ll_getattr, ino = " << hex << ino << dec << endl;
     struct stat attr;
     memset(&attr, 0, sizeof(attr));
 
@@ -211,7 +211,8 @@ namespace lightfs {
     r = lfuse->lfs->ll_create(req, parent, name, mode, &e.attr, fi->flags, (Fh **)&fh);
     if (r == 0) {
       e.ino = e.attr.st_ino;
-      fuse_reply_create(req, &e, fi);
+      fi->fh = (long)fh;
+      r = fuse_reply_create(req, &e, fi);
     } else {
       fuse_reply_err(req, -r);
     }
@@ -279,10 +280,8 @@ namespace lightfs {
     if (fi) 
       fh = (Fh *)fi->fh;
 
-    cout << "fuse_ll_write: before ll_write " << endl;
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
     r = lfuse->lfs->ll_write(req, off, size, buf, fh);
-    cout << "fuse_ll_write: r = " << r << endl;
     if (r >= 0) {
       fuse_reply_write(req, r);
     } else {
@@ -322,7 +321,7 @@ namespace lightfs {
   listxattr:0,
   removexattr:0,
   access:0,
-  create:0,
+  create:fuse_ll_create,
   getlk:0,
   setlk:0,
   bmap:0,

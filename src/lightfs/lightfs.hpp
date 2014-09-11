@@ -136,7 +136,8 @@ namespace lightfs
     
     /* file ops */
     int mknod(inodeno_t pino, const char *name, mode_t mode, inodeno_t &ino, inode_t &inode);
-    int create(inodeno_t pino, const char *name, int flags, Fh *fh);
+    int create(inodeno_t pino, const char *name, int mode, int flags,
+		 inodeno_t &ino, Fh *fh, int uid = -1, int gid = -1);
     int unlink(inodeno_t pino, const char *name);
     int open(inodeno_t myino, int flags, Fh *fh);
     int release(Fh *fh);
