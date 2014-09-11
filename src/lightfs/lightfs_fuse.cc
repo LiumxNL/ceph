@@ -64,7 +64,7 @@ namespace lightfs {
     int r = -1;
     
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req); 
-    void *d_buf;
+    void *d_buf = NULL;
     r = lfuse->lfs->ll_opendir(req, ino, (dir_buffer **)&d_buf);
     if (r == 0) {
       fi->fh = (long)d_buf;
@@ -141,7 +141,29 @@ namespace lightfs {
 
   static void fuse_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
                         fuse_ino_t newparent, const char *newname)
-  {}
+  {
+    int r = -1;
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_rename(req, parent, name, newparent, newname);
+    fuse_reply_err(req, -r);
+  }
+
+  static void fuse_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
+			int to_set, struct fuse_file_info *fi)
+  {
+    int r = -1;
+    Fh *fh = NULL;
+    if (fi) 
+      fh = (Fh *)fi->fh;
+
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_setattr(req, ino, attr, to_set, fh);
+    if (r == 0) {
+      fuse_reply_attr(req, attr, 0);
+    } else {
+      fuse_reply_err(req, -r);
+    }
+  }
 
   static void fuse_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 			struct fuse_file_info *fi)
@@ -161,17 +183,113 @@ namespace lightfs {
     }
   }
 
+  static void fuse_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
+			mode_t mode, dev_t rdev)
+  {
+    int r = -1;
+    struct fuse_entry_param e;
+    
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_mknod(req, parent, name, mode, rdev, &e.attr); 
+    if (r == 0) {
+      e.ino = e.attr.st_ino;
+      fuse_reply_entry(req, &e);
+    } else {
+      fuse_reply_err(req, -r);
+    }
+     
+  }
+
+  static void fuse_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
+			mode_t mode, struct fuse_file_info *fi)
+  {
+    int r = -1;
+    struct fuse_entry_param e;
+    void *fh = NULL;
+
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_create(req, parent, name, mode, &e.attr, fi->flags, (Fh **)&fh);
+    if (r == 0) {
+      e.ino = e.attr.st_ino;
+      fuse_reply_create(req, &e, fi);
+    } else {
+      fuse_reply_err(req, -r);
+    }
+  }
+
+  static void fuse_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
+  {
+    int r = -1;
+     
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_unlink(req, parent, name);
+    fuse_reply_err(req, -r);
+  }
+
   static void fuse_ll_open(fuse_req_t req, fuse_ino_t ino,
-                      struct fuse_file_info *fi)
-  {}
+			struct fuse_file_info *fi)
+  {
+    int r = -1;
+    void *fh = NULL;
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_open(req, ino, fi->flags, (Fh **)&fh);
+    cout << "ll_open: r = " << r << endl;
+    if (r == 0) {
+      fi->fh = (long)fh;
+      fuse_reply_open(req, fi);
+    } else {
+      fuse_reply_err(req, -r);
+    }
+  }
+
+  static void fuse_ll_release(fuse_req_t req, fuse_ino_t ino,
+			struct fuse_file_info *fi)
+  {
+    int r = -1;
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    Fh *fh = (Fh *)fi->fh;
+    r = lfuse->lfs->ll_release(req, fh);
+    fuse_reply_err(req, -r);
+  }
 
   static void fuse_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                       struct fuse_file_info *fi)
-  {}
+  {
+    int r = -1;
+    Fh *fh = NULL;
+    bufferlist bl;
+    if (fi)
+      fh = (Fh *)fi->fh;
+ 
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_read(req, size, off, fh, &bl);
+    if (r >= 0) {
+      fuse_reply_buf(req, bl.c_str(), bl.length());
+    } else {
+      fuse_reply_err(req, -r);
+    }
+  }
+
 
   static void fuse_ll_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
                        size_t size, off_t off, struct fuse_file_info *fi)
-  {}
+  {
+    int r = -1;
+    Fh *fh = NULL;
+    if (fi) 
+      fh = (Fh *)fi->fh;
+
+    cout << "fuse_ll_write: before ll_write " << endl;
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_write(req, off, size, buf, fh);
+    cout << "fuse_ll_write: r = " << r << endl;
+    if (r >= 0) {
+      fuse_reply_write(req, r);
+    } else {
+      fuse_reply_err(req, -r);
+    }
+  }
+
 
   static struct fuse_lowlevel_ops fuse_ll_oper = {
   init:fuse_ll_init,
@@ -179,20 +297,20 @@ namespace lightfs {
   lookup:fuse_ll_lookup,
   forget:0,
   getattr:fuse_ll_getattr,
-  setattr:0,
+  setattr:fuse_ll_setattr,
   readlink:0,
-  mknod:0,
+  mknod:fuse_ll_mknod,
   mkdir:fuse_ll_mkdir,
-  unlink:0,
+  unlink:fuse_ll_unlink,
   rmdir:fuse_ll_rmdir,
   symlink:0,
-  rename:0,
+  rename:fuse_ll_rename,
   link:0,
-  open:0,
-  read:0,
-  write:0,
+  open:fuse_ll_open,
+  read:fuse_ll_read,
+  write:fuse_ll_write,
   flush:0,
-  release:0,
+  release:fuse_ll_release,
   fsync:0,
   opendir:fuse_ll_opendir,
   readdir:fuse_ll_readdir,
@@ -260,190 +378,3 @@ namespace lightfs {
   }
 
 }
-
-
-
-
-/*
-#define ERRO 0
-
-FILE *input;
-
-void show_info(const char *str)
-{
-	input = fopen("show_info.txt","a");
-	fprintf(input,"%s\n",str);
-	fclose(input);
-}
-
-static void fuse_ll_getattr(fuse_req_t req, fuse_ino_t ino,struct fuse_file_info *fi)
-	{
-		struct stat stbuf;
-		memset(&stbuf,0,sizeof(stbuf));
-		stbuf.st_ino = ino;
-
-		char buf[65] = {'\0'};
-		sprintf(buf, "%lu", ino);
-		show_info(buf);
-
-		if(ino == 1)
-			stbuf.st_mode = S_IFDIR | 0755;
-		else	stbuf.st_mode = S_IFREG | 0644;
-		if(ERRO)
-//int fuse_reply_err (fuse_req_t req, int err)
-			fuse_reply_err(req,-errno);
-//int fuse_reply_attr(fuse_req_t req, const struct stat *attr,double attr_timeout);
-		else
-			fuse_reply_attr(req,&stbuf,1.0);
-	}
-
-static void fuse_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
-                       mode_t mode)
-	{
-		struct fuse_entry_param e;
-		mkdir(name,mode);
-		memset(&e,0,sizeof(e));
-		e.ino = 3;
-		e.attr.st_ino = e.ino;
-		e.attr.st_mode = S_IFDIR | 0755;
-		e.attr_timeout = 1.0;
-		e.entry_timeout = 1.0;
-		if(ERRO)
-			fuse_rep_err(req,-errno);
-		else
-//int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e);
-			fuse_reply_entry(req,&e);
-	}
-                       
-static void fuse_ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
-	{
-		if(ERRO)
-			fuse_reply_err(req,-errno);
-		
-	}
-static void fuse_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
-                         struct fuse_file_info *fi)
-	{
-		size_t rd_size;
-
-		if(ERRO)
-			fuse_reply_err(req,-errno);
-		else
-		if(off<100)
-		{
-			char buf[100];
-			const char *name = "name";
-			struct stat stbuf;
-			memset(&stbuf,0,sizeof(stbuf));
-			stbuf.st_ino = ino;
-			stbuf.st_mode = S_IFREG | 0644;
-//size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,const char *name, const struct stat *stbuf,off_t off);
-			rd_size = fuse_add_direntry(req,buf,100,name,&stbuf,100);
-
-//int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size);
-			fuse_reply_buf(req,buf,100);
-		}
-		else fuse_reply_buf(req,NULL,0);
-	}
-static void fuse_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
-	{
-		struct fuse_entry_param e;
-		memset(&e,0,sizeof(e));
-		e.ino = 2;
-		e.attr.st_ino = e.ino;
-		e.attr.st_mode = S_IFREG | 0644;
-		e.attr_timeout = 1.0;
-		e.entry_timeout = 1.0;
-  		show_info("fuse_ll_lookup");
-		if(ERRO)
-			fuse_reply_err(req,-errno);
-		else
-			fuse_reply_entry(req,&e);
-	}
-static void fuse_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
-                        fuse_ino_t newparent, const char *newname)
-	{
-		if(ERRO)
-			fuse_reply_err(req,-errno);
-	}
-
-static void fuse_ll_open(fuse_req_t req, fuse_ino_t ino,
-                      struct fuse_file_info *fi)
-	{
-		if(ERRO)
-			fuse_reply_err(req,-errno);
-		else
-			fuse_reply_open(req,fi);
-	}
-static void fuse_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
-                      struct fuse_file_info *fi)
-	{
-		if(ERRO)
-			fuse_reply_err(req,-errno);
-		else
-		{
-			char *buf = NULL;
-			fuse_reply_buf(req,buf,0);
-		}
-	}
-
-static void fuse_ll_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
-                       size_t size, off_t off, struct fuse_file_info *fi)
-	{
-		if(ERRO)
-			fuse_reply_err(req,-errno);
-		else
-			fuse_reply_write(req,0);
-	}
-
-static void fuse_ll_release(fuse_req_t req, fuse_ino_t ino,
-                         struct fuse_file_info *fi)
-	{
-		if(ERRO)
-			fuse_reply_err(req,-errno);
-	}
-
-static struct fuse_lowlevel_ops fuse_ll_oper = {
-	.getattr	= fuse_ll_getattr,
-	.mkdir		= fuse_ll_mkdir,
-	.rmdir		= fuse_ll_rmdir,
-	.readdir	= fuse_ll_readdir,
-	.lookup		= fuse_ll_lookup,
-	.rename		= fuse_ll_rename,
-	
-//	.open		= NULL,
-//	.read		= NULL,
-//	.write		= NULL,
-//	.release	= NULL,
-};
-
-int main(int argc, char *argv[])
-{
-//define FUSE_ARGS_INIT(argc, argv) { argc, argv, 0 }
-	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-	struct fuse_chan *ch;
-	char *mountpoint;
-	int err = -1;
-
-	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1 &&
-	    (ch = fuse_mount(mountpoint, &args)) != NULL) {
-		struct fuse_session *se;
-
-		se = fuse_lowlevel_new(&args, &fuse_ll_oper,
-				       sizeof(fuse_ll_oper), NULL);
-		if (se != NULL) {
-			if (fuse_set_signal_handlers(se) != -1) {
-				fuse_session_add_chan(se, ch);
-				err = fuse_session_loop(se);
-				fuse_remove_signal_handlers(se);
-				fuse_session_remove_chan(ch);
-			}
-			fuse_session_destroy(se);
-		}
-		fuse_unmount(mountpoint, ch);
-	}
-	fuse_opt_free_args(&args);
-
-	return err ? 1 : 0;
-}
-*/

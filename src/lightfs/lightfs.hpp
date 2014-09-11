@@ -119,10 +119,9 @@ namespace lightfs
     /* helper */
     void file_to_objects(off_t file_off, off_t file_len, std::map<off_t, std::pair<off_t, off_t> > &objects);
     void objects_to_file(std::map<off_t, std::pair<off_t, off_t> > objects, off_t &off, off_t &len);
-    void fill_stat(struct stat *attr, inodeno_t ino, inode_t inode);
-    void fill_dirent(struct dirent *ent, inodeno_t ino, off_t next_off, int type, const char *name);
-    void add_dirent(fuse_req_t req, struct dirent *ent, struct stat *stbuf, int stmask, off_t next_off);
-
+    void fill_stat(struct stat *st, inodeno_t ino, inode_t inode, 
+		dev_t rdev = 0, dev_t dev = 0, nlink_t l = 1);
+    utime_t lightfs_now();
 
     bool create_root();
     
@@ -132,10 +131,15 @@ namespace lightfs
     int rmdir(inodeno_t pino, const char *name);
     int lookup(inodeno_t pino, const char *name, inodeno_t &ino);
     int rename(inodeno_t pino, const char *oldname, const char *newname);
+    int setattr(inodeno_t ino, inode_t &inode, int mask);
     int getattr(inodeno_t myino, inode_t &inode);
     
     /* file ops */
+    int mknod(inodeno_t pino, const char *name, mode_t mode, inodeno_t &ino, inode_t &inode);
+    int create(inodeno_t pino, const char *name, int flags, Fh *fh);
+    int unlink(inodeno_t pino, const char *name);
     int open(inodeno_t myino, int flags, Fh *fh);
+    int release(Fh *fh);
     int lseek(Fh *fh, off_t off, int whence);
     int read(Fh *fh, off_t off, off_t len, bufferlist *bl);
     int write(Fh *fh, off_t off, off_t len, const char *data);
@@ -144,7 +148,7 @@ namespace lightfs
     int readdir(inodeno_t ino, std::map<std::string, inodeno_t> &result);
     int releasedir(dir_buffer *d_buffer);
 
-    /* fuse lowlevel ops */
+    /* fuse lowlevel ops : inode ops */
     int ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, 
 		struct stat *attr);
     int ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name);
@@ -152,12 +156,20 @@ namespace lightfs
 		struct stat *attr);
     int ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name, 
 		fuse_ino_t newparent, const char *newname);
+    int ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
+		int to_set, Fh *fh);
     int ll_getattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr);
-    int ll_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
-    int ll_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, 
-		struct fuse_file_info *fi);
-    int ll_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t size, off_t off, 
- 		struct fuse_file_info *fi);
+
+    /* fuse lowlevel ops : file ops */
+    int ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode,
+		dev_t rdev, struct stat *attr);
+    int ll_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode,
+		struct stat *attr, int flags, Fh **fhp);
+    int ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name);
+    int ll_open(fuse_req_t req, fuse_ino_t ino, int flags, Fh **fhp);
+    int ll_release(fuse_req_t req, Fh *fh);
+    int ll_read(fuse_req_t req, size_t size, off_t off, Fh *fh, bufferlist *bl);
+    int ll_write(fuse_req_t req, off_t off, size_t size, const char *buf, Fh *fh);
     int ll_opendir(fuse_req_t req, fuse_ino_t ino, dir_buffer **d_buffer);
     int ll_readdir(fuse_req_t req, fuse_ino_t ino, off_t off, off_t size,
 		off_t *fill_size, char *buf, dir_buffer *d_buffer);
