@@ -638,7 +638,7 @@ namespace lightfs
     if (r < 0)
       return r;
 
-    string poid, oid;
+    string poid, oid, foid;
     get_inode_oid(pino, poid);
     get_inode_oid(ino, oid);
     //reomve entry in parent inode object
@@ -651,16 +651,17 @@ namespace lightfs
     off_t i = 0;
     //remove file object data.<ino>.<off>
     for (i = 0; i < count; i++) {
-      get_file_oid(ino, i, oid);
-      cout << oid << endl;
+      get_file_oid(ino, i, foid);
+      cout << foid << endl;
       librados::AioCompletion *comp = librados::Rados::aio_create_completion();
-      r = _ioctx->aio_remove(oid, comp);
+      r = _ioctx->aio_remove(foid, comp);
       comp->release();
       cout << "remove: r = " << r << endl;
       if (r < 0 && r != -ENOENT)
         return r;
     }
    
+    cout << "inode = " << oid << endl;
     //remove file inode object 
     return cls_client::remove_inode(_ioctx, oid); 
   }
@@ -977,8 +978,15 @@ namespace lightfs
   int Lightfs::ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
                 int to_set, Fh *fh)
   {
+    int r = -1;
     int mask = 0;
     inode_t inode;
+
+    //get inode info from osd
+    r = getattr(ino, inode);
+    if (r < 0)
+      return r;
+
     if (to_set & FUSE_SET_ATTR_MODE) {
       mask |= ATTR_MODE;
       inode.mode = attr->st_mode;
@@ -1007,7 +1015,11 @@ namespace lightfs
     mask |= ATTR_CTIME;
     inode.ctime = lightfs_now();
 
-    return setattr(ino, inode, mask);    
+    r = setattr(ino, inode, mask);    
+    if (r < 0)
+      return r;
+    fill_stat(attr, ino, inode);
+    return 0;
   }
 
   int Lightfs::ll_getattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr)

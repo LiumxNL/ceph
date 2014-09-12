@@ -35,6 +35,17 @@ namespace lightfs {
     cout << "st_ctime:" << st->st_ctime << endl;
     cout << "]" << endl;
   }
+
+  static void print_fh(Fh *fh)
+  {
+    cout << "[" << endl;
+    cout << "ino:" << hex << fh->ino << dec << endl;
+    cout << "*inode:" << hex << fh->inode << dec << endl;
+    cout << "pos:" << fh->pos << endl;
+    cout << "mode:" << oct << fh->mode << dec << endl;
+    cout << "flags:" << oct << fh->flags << dec << endl;
+    cout << "]" << endl;
+  }
   
   static void fuse_ll_init(void *userdata, struct fuse_conn_info* conn)
   {
@@ -151,6 +162,8 @@ namespace lightfs {
   static void fuse_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			int to_set, struct fuse_file_info *fi)
   {
+    cout << "fuse_ll_setattr: ino = " << hex << ino << dec
+         << " fi = " << hex << fi << dec << endl;
     int r = -1;
     Fh *fh = NULL;
     if (fi) 
@@ -209,6 +222,7 @@ namespace lightfs {
 
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
     r = lfuse->lfs->ll_create(req, parent, name, mode, &e.attr, fi->flags, (Fh **)&fh);
+    print_stat(&e.attr);
     if (r == 0) {
       e.ino = e.attr.st_ino;
       fi->fh = (long)fh;
