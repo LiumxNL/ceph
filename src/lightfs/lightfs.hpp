@@ -4,6 +4,7 @@
 #include <string>
 #include <map>
 #include <fuse/fuse_lowlevel.h>
+#include <libgen.h>
 
 #include "common/Mutex.h"
 
@@ -15,6 +16,9 @@
 
 #define ROOT_INO 1
 #define ROOT_PARENT 2
+
+#define MAX_NAME_LEN 256
+#define VALID_NAME(x) (1 + strlen((x))) <= MAX_NAME_LEN ? 1 : 0
 
 namespace lightfs
 {
@@ -122,6 +126,9 @@ namespace lightfs
     void fill_stat(struct stat *st, inodeno_t ino, inode_t inode, 
 		dev_t rdev = 0, dev_t dev = 0, nlink_t l = 1);
     utime_t lightfs_now();
+    int path_walk(const char *pathname, char *out_parent, bool out_exit);
+    int write_symlink(inodeno_t ino, string target, inode_t inode);
+    int read_symlink(inodeno_t ino, string &target);
 
     bool create_root();
     
@@ -129,6 +136,9 @@ namespace lightfs
     int do_mkdir(inodeno_t pino, const char *name, inodeno_t myino, inode_t &inode);
     int mkdir(inodeno_t pino, const char *name, inodeno_t *ino, inode_t &inode);
     int rmdir(inodeno_t pino, const char *name);
+    int symlink(const char *link, inodeno_t pino, const char *name,
+		inodeno_t ino, inode_t inode);
+    int readlink(inodeno_t ino, string &linkname);
     int lookup(inodeno_t pino, const char *name, inodeno_t &ino);
     int rename(inodeno_t pino, const char *oldname, const char *newname);
     int setattr(inodeno_t ino, inode_t &inode, int mask);
@@ -153,6 +163,9 @@ namespace lightfs
     int ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, 
 		struct stat *attr);
     int ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name);
+    int ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
+		const char *name, struct stat *attr);
+    int ll_readlink(fuse_req_t req, fuse_ino_t ino, string &linkname);
     int ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		struct stat *attr);
     int ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name, 

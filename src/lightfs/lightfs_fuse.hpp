@@ -16,7 +16,7 @@ namespace lightfs {
     char *mountpoint;
     Lightfs *lfs;
     
-    LightfsFuse(Lightfs *fs) : ch(NULL), se(NULL), lfs(fs) {}
+    LightfsFuse(Lightfs *fs) : ch(NULL), se(NULL), mountpoint(NULL), lfs(fs) {}
     ~LightfsFuse() {}
  
     int init(int argc, char *argv[]);

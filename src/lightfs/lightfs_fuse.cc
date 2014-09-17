@@ -55,6 +55,10 @@ namespace lightfs {
   static void fuse_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
                        mode_t mode)
   {
+    if (!VALID_NAME(name)) {
+      fuse_reply_err(req, ENAMETOOLONG);
+      return;
+    }
     int r = -1;
     struct fuse_entry_param e;
     memset(&e, 0, sizeof(e));
@@ -132,6 +136,30 @@ namespace lightfs {
     fuse_reply_err(req, -r);
   }
 
+  static void fuse_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
+		const char *name)
+  {
+    if (!VALID_NAME(name)) {
+      fuse_reply_err(req, ENAMETOOLONG);
+      return;
+    }
+    //parent: pino of name (symlink) 
+    cout << "symlink: " << link << ", parent:" << hex << parent << dec << " name:" << name << endl;
+    int r = -1;
+    fuse_entry_param e;
+    memset(&e, 0, sizeof(e));
+    
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    cout << "symlink: mountpoint = " << lfuse->mountpoint << endl;
+    r = lfuse->lfs->ll_symlink(req, link, parent, name, &e.attr);
+    if (r == 0) {
+      e.ino = e.attr.st_ino;
+      fuse_reply_entry(req, &e);
+    } else {
+      fuse_reply_err(req, -r);
+    }
+  }
+
   static void fuse_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
   {
     int r = -1;
@@ -153,6 +181,12 @@ namespace lightfs {
   static void fuse_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
                         fuse_ino_t newparent, const char *newname)
   {
+    if (!VALID_NAME(newname)) {
+      fuse_reply_err(req, ENAMETOOLONG);
+      return;
+    }
+    cout << "fuse_ll_rename:" << name << " -> " << newname << " parent:" 
+	<< hex << parent << " newparent: " << newparent  << dec << endl;
     int r = -1;
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
     r = lfuse->lfs->ll_rename(req, parent, name, newparent, newname);
@@ -196,9 +230,27 @@ namespace lightfs {
     }
   }
 
+  static void fuse_ll_readlink(fuse_req_t req, fuse_ino_t ino)
+  {
+    int r = -1;
+    string linkname;    
+
+    LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
+    r = lfuse->lfs->ll_readlink(req, ino, linkname);
+    if (r == 0) {
+      fuse_reply_readlink(req, linkname.c_str());
+    } else {
+      fuse_reply_err(req, -r);
+    }
+  }
+
   static void fuse_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
 			mode_t mode, dev_t rdev)
   {
+    if (!VALID_NAME(name)) {
+      fuse_reply_err(req, ENAMETOOLONG);
+      return;
+    }
     int r = -1;
     struct fuse_entry_param e;
     
@@ -216,6 +268,10 @@ namespace lightfs {
   static void fuse_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 			mode_t mode, struct fuse_file_info *fi)
   {
+    if (!VALID_NAME(name)) {
+      fuse_reply_err(req, ENAMETOOLONG);
+      return;
+    }
     int r = -1;
     struct fuse_entry_param e;
     void *fh = NULL;
@@ -303,7 +359,6 @@ namespace lightfs {
     }
   }
 
-
   static struct fuse_lowlevel_ops fuse_ll_oper = {
   init:fuse_ll_init,
   destroy:0, 
@@ -311,12 +366,12 @@ namespace lightfs {
   forget:0,
   getattr:fuse_ll_getattr,
   setattr:fuse_ll_setattr,
-  readlink:0,
+  readlink:fuse_ll_readlink,
   mknod:fuse_ll_mknod,
   mkdir:fuse_ll_mkdir,
   unlink:fuse_ll_unlink,
   rmdir:fuse_ll_rmdir,
-  symlink:0,
+  symlink:fuse_ll_symlink,
   rename:fuse_ll_rename,
   link:0,
   open:fuse_ll_open,

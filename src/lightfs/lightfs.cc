@@ -390,6 +390,56 @@ namespace lightfs
     return t;
   }
 
+  int Lightfs::path_walk(const char *pathname, char *out_parent, bool out_exit)
+  {
+    return 0;
+  }
+
+  int Lightfs::write_symlink(inodeno_t ino, string target, inode_t inode)
+  {
+    int r = -1;
+    string oid;
+    get_inode_oid(ino, oid);
+
+    bufferlist valbl, inbl;
+    valbl.append(target);
+    inode.encode(ATTR_ALL, inbl); 
+
+    string key("LINK");
+    librados::ObjectWriteOperation wr;
+    std::map<string, bufferlist> inmap;
+    inmap[key] = valbl;
+    wr.omap_set(inmap);
+    wr.omap_set_header(inbl);
+    r = _ioctx->operate(oid, &wr);
+    cout << "write_symlink: operate = " << r << endl;
+    return r;
+  }
+
+  int Lightfs::read_symlink(inodeno_t ino, string &target)
+  {
+    int r = -1;
+    int rval = -1;
+    bufferlist bl;
+    string oid;
+    get_inode_oid(ino, oid);
+    
+    std::set<string> keys;
+    keys.insert("LINK");
+    std::map<string, bufferlist> outmap;
+
+    librados::ObjectReadOperation rd;
+    rd.omap_get_vals_by_keys(keys, &outmap, &rval);
+    r = _ioctx->operate(oid, &rd, &bl);
+    cout << "read_symlink: operate = " << r << endl;
+    if (r < 0)
+      return r;
+    std::map<string, bufferlist>::iterator p = outmap.begin();
+    target = p->second.c_str();
+    return 0;
+  }
+
+
   /*lightfs member*/
   bool Lightfs::create_root()
   {
@@ -500,6 +550,30 @@ namespace lightfs
     // 2. unlink <N.name, ino> & <I.ino, name> in parent
     // log backend will remove sub inode and its subs
     return cls_client::unlink_inode(_ioctx, poid, name, ino);
+  }
+
+  int Lightfs::symlink(const char *link, inodeno_t pino, const char *name,
+                inodeno_t ino, inode_t inode)
+  {
+    int r = -1; 
+    string oid, poid, target(link);
+    get_inode_oid(ino, oid);
+    get_inode_oid(pino, poid);
+    
+    r = write_symlink(ino, target, inode); 
+    if (r < 0)
+      return r;
+    r = cls_client::link_inode(_ioctx, poid, name, ino);
+    if (r < 0) {
+      cls_client::remove_inode(_ioctx, oid);
+      return r;
+    }
+    return 0;
+  }
+
+  int Lightfs::readlink(inodeno_t ino, string &linkname)
+  {
+    return read_symlink(ino, linkname); 
   }
 
   int Lightfs::lookup(inodeno_t pino, const char *name, inodeno_t &ino)
@@ -939,6 +1013,30 @@ namespace lightfs
   int Lightfs::ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
   {
     return rmdir(parent, name);
+  }
+
+  int Lightfs::ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
+                const char *name, struct stat *attr)
+  {
+    int r = -1;
+    inodeno_t ino;
+    inode_t inode;
+    
+    _ino_gen->generate(ino);
+    inode.mode |= S_IFLNK | 0644;
+    inode.ctime = lightfs_now();
+
+    r = symlink(link, parent, name, ino, inode);
+    if (r < 0)
+      return r;
+
+    fill_stat(attr, ino, inode);
+    return 0;
+  }
+
+  int Lightfs::ll_readlink(fuse_req_t req, fuse_ino_t ino, string &linkname)
+  {
+    return readlink(ino, linkname); 
   }
 
   int Lightfs::ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
