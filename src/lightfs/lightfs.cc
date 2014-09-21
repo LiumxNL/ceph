@@ -443,6 +443,7 @@ namespace lightfs
   /*lightfs member*/
   bool Lightfs::create_root()
   {
+    cout << "create_root: has_root = " << has_root << endl;
     if (has_root)
       return true;
     int r = -1;
@@ -466,12 +467,15 @@ namespace lightfs
     inode.mode = S_IFDIR;
 
     r = cls_client::create_inode(_ioctx, oid, true, inode);
+    cout << "create_root: create_inode, r = " << r << endl;
     if (r < 0 && r != -EEXIST) 
       return false;
     r = cls_client::link_inode(_ioctx, oid, "..", ROOT_PARENT);	
+    cout << "create_root: link_inode <.., ino> , r = " << r << endl;
     if (r < 0 && r != -EEXIST) 
       return false;
     r = cls_client::link_inode(_ioctx, oid, ".", ROOT_INO);
+    cout << "create_root: link_inode <., ino>, r = " << r << endl;
     if (r < 0 && r != -EEXIST) 
       return false;
     has_root = true;
@@ -1296,15 +1300,15 @@ namespace lightfs
       entry = p->first.c_str();
       //get the dir entry size
       ent_size = fuse_add_direntry(req, NULL, 0, entry, NULL, 0);
-      cout << "ent_size = " << ent_size << endl;
+      //cout << "ent_size = " << ent_size << endl;
       next_off_size += ent_size;
       if (next_off_size > remind_size)
         break;
       next_off++;
       if (next_off > entry_count)
         break;
-      printf("%s, remind_size = %ld, fill_size = %ld,  cur_off = %ld, next_off = %ld, ptr = %p\n", 
-        entry, remind_size, fill_size, cur_off, next_off, ptr);
+      //printf("%s, remind_size = %ld, fill_size = %ld,  cur_off = %ld, next_off = %ld, ptr = %p\n", 
+      //  entry, remind_size, fill_size, cur_off, next_off, ptr);
    
       ent_ino = p->second;
       cout << "<" << entry << ", " << hex << ent_ino << dec << ">" << endl;
@@ -1312,7 +1316,7 @@ namespace lightfs
 	inode.mode = S_IFDIR;	
       } else { 
         r = getattr(ent_ino, inode);
-        cout << "getattr = " << r << endl; 
+        //cout << "getattr = " << r << endl; 
         if (r < 0)
           return r; 
       }

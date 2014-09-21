@@ -278,7 +278,6 @@ namespace lightfs {
 
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
     r = lfuse->lfs->ll_create(req, parent, name, mode, &e.attr, fi->flags, (Fh **)&fh);
-    print_stat(&e.attr);
     if (r == 0) {
       e.ino = e.attr.st_ino;
       fi->fh = (long)fh;

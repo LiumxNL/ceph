@@ -18,7 +18,7 @@
 #define ROOT_PARENT 2
 
 #define MAX_NAME_LEN 256
-#define VALID_NAME(x) (1 + strlen((x))) <= MAX_NAME_LEN ? 1 : 0
+#define VALID_NAME(x) ((1 + strlen((x))) <= MAX_NAME_LEN) ? 1 : 0
 
 namespace lightfs
 {
