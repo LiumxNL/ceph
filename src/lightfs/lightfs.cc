@@ -6,6 +6,7 @@
 #include "cls/lightfs/cls_lightfs_client.h"
 
 using namespace librados;
+using namespace std;
 
 namespace lightfs
 {
@@ -293,12 +294,62 @@ namespace lightfs
   void release_comp_callback(librados::completion_t cb, void *arg)
   {
     librados::AioCompletion *comp = static_cast<librados::AioCompletion *>(cb);
-    cout << "will release comp if it exits" << endl;
+    cout << "will release comp if it exits" << std::endl;
     if (comp && comp->pc)
       comp->release();
   }
 
+  /* class LightfsWriteback */
+
+  LightfsWriteback::LightfsWriteback(librados::IoCtx &ioctx)
+    : _ioctx(ioctx)
+    , _tid(0)
+  {
+  }
+
+  void LightfsWriteback::read(const object_t& oid, const object_locator_t& oloc,
+		              uint64_t off, uint64_t len, snapid_t snapid,
+                              bufferlist *pbl, uint64_t trunc_size,  __u32 trunc_seq,
+                              Context *onfinish)
+  {
+  }
+
+  bool LightfsWriteback::may_copy_on_write(const object_t& oid, uint64_t read_off, uint64_t read_len, snapid_t snapid)
+  {
+    return false;
+  }
+
+  ceph_tid_t LightfsWriteback::write(const object_t& oid, const object_locator_t& oloc,
+                                     uint64_t off, uint64_t len, const SnapContext& snapc,
+                                     const bufferlist &bl, utime_t mtime,
+                                     uint64_t trunc_size, __u32 trunc_seq,
+                                     Context *oncommit)
+  {
+    return ++_tid;
+  }
+
   /* class Lightfs */
+
+  Lightfs::Lightfs(librados::IoCtx *ctx, InoGenerator *ino_gen, const long unsigned myorder)
+    : mutex("lightfs_client")
+    , has_root(false), order(myorder), _inode_cache(), _ioctx(ctx), _ino_gen(ino_gen)
+  {
+    CephContext *cct = (CephContext *)ctx->cct();
+    writeback_handler = new LightfsWriteback(*ctx);
+    objectcacher = new ObjectCacher(cct, "lightfs", *writeback_handler, mutex, NULL, NULL,
+                                    cct->_conf->client_oc_size,
+                                    cct->_conf->client_oc_max_objects,
+                                    cct->_conf->client_oc_max_dirty,
+                                    cct->_conf->client_oc_target_dirty,
+                                    cct->_conf->client_oc_max_dirty_age,
+                                    true);
+  }
+
+  Lightfs::~Lightfs()
+  {
+    delete writeback_handler;
+    delete objectcacher;
+  }
 
   /* helper */
   void Lightfs::file_to_objects(off_t file_off, off_t file_len, std::map<off_t, std::pair<off_t, off_t> > &objects)
@@ -425,7 +476,7 @@ namespace lightfs
     wr.omap_set(inmap);
     wr.omap_set_header(inbl);
     r = _ioctx->operate(oid, &wr);
-    cout << "write_symlink: operate = " << r << endl;
+    cout << "write_symlink: operate = " << r << std::endl;
     return r;
   }
 
@@ -444,7 +495,7 @@ namespace lightfs
     librados::ObjectReadOperation rd;
     rd.omap_get_vals_by_keys(keys, &outmap, &rval);
     r = _ioctx->operate(oid, &rd, &bl);
-    cout << "read_symlink: operate = " << r << endl;
+    cout << "read_symlink: operate = " << r << std::endl;
     if (r < 0)
       return r;
     std::map<string, bufferlist>::iterator p = outmap.begin();
@@ -456,7 +507,7 @@ namespace lightfs
   /*lightfs member*/
   bool Lightfs::create_root()
   {
-    cout << "create_root: has_root = " << has_root << endl;
+    cout << "create_root: has_root = " << has_root << std::endl;
     if (has_root)
       return true;
     int r = -1;
@@ -480,15 +531,15 @@ namespace lightfs
     inode.mode = S_IFDIR;
 
     r = cls_client::create_inode(_ioctx, oid, true, inode);
-    cout << "create_root: create_inode, r = " << r << endl;
+    cout << "create_root: create_inode, r = " << r << std::endl;
     if (r < 0 && r != -EEXIST) 
       return false;
     r = cls_client::link_inode(_ioctx, oid, "..", ROOT_PARENT);	
-    cout << "create_root: link_inode <.., ino> , r = " << r << endl;
+    cout << "create_root: link_inode <.., ino> , r = " << r << std::endl;
     if (r < 0 && r != -EEXIST) 
       return false;
     r = cls_client::link_inode(_ioctx, oid, ".", ROOT_INO);
-    cout << "create_root: link_inode <., ino>, r = " << r << endl;
+    cout << "create_root: link_inode <., ino>, r = " << r << std::endl;
     if (r < 0 && r != -EEXIST) 
       return false;
     has_root = true;
@@ -543,9 +594,9 @@ namespace lightfs
     if (out_ino)
       *out_ino = ino;
 
-    //cout << "<" << name << ", " << hex << ino << dec << ">" << endl;
+    //cout << "<" << name << ", " << hex << ino << dec << ">" << std::endl;
     r = do_mkdir(pino, name, ino, inode);
-    //cout << "do_mkdir = " << r << endl;
+    //cout << "do_mkdir = " << r << std::endl;
     if (r < 0)
       return r;
     return 0;
@@ -600,7 +651,7 @@ namespace lightfs
     
     int r = -1;
     r = cls_client::find_inode(_ioctx, poid, name, ino);
-    //cout << "lookup : r = " << r << endl;
+    //cout << "lookup : r = " << r << std::endl;
     return r;
   }
 
@@ -644,13 +695,13 @@ namespace lightfs
 
     r = cls_client::find_inode(_ioctx, poid, myname, ino);
     if (r == 0) {
-      cout << name << " already exist, so return" << endl;
+      cout << name << " already exist, so return" << std::endl;
       return -EEXIST;
     }
 
     r = _ino_gen->generate(ino);
     if (r < 0) {
-      cout << "generate ino failed, r = " << r << endl;
+      cout << "generate ino failed, r = " << r << std::endl;
       return r;
     }
 
@@ -676,12 +727,12 @@ namespace lightfs
   int Lightfs::create(inodeno_t pino, const char *name, int mode, int flags, 
 		inodeno_t &ino, Fh *fh, int uid, int gid)
   {
-    cout << "create:" << name << " pino = " << pino << endl;
+    cout << "create:" << name << " pino = " << pino << std::endl;
     int r = -1;
     string poid, oid;
     
     _ino_gen->generate(ino); 
-    cout << "generate ino = " << hex << ino << dec << endl;
+    cout << "generate ino = " << hex << ino << dec << std::endl;
     get_inode_oid(ino, oid);
     get_inode_oid(pino, poid);
 
@@ -721,11 +772,11 @@ namespace lightfs
     inodeno_t ino;
     inode_t inode;
     r = lookup(pino, name, ino);
-    cout << "lookup "<< name << ": r = " << r << endl;
+    cout << "lookup "<< name << ": r = " << r << std::endl;
     if (r < 0)
       return r;
     r = getattr(ino, inode);
-    cout << "getattr " << ino << ": r = " << r << endl;
+    cout << "getattr " << ino << ": r = " << r << std::endl;
     if (r < 0)
       return r;
 
@@ -743,16 +794,16 @@ namespace lightfs
     //remove file object data.<ino>.<off>
     for (i = 0; i < count; i++) {
       get_file_oid(ino, i, foid);
-      cout << foid << endl;
+      cout << foid << std::endl;
       librados::AioCompletion *comp = librados::Rados::aio_create_completion();
       r = _ioctx->aio_remove(foid, comp);
       comp->release();
-      cout << "remove: r = " << r << endl;
+      cout << "remove: r = " << r << std::endl;
       if (r < 0 && r != -ENOENT)
         return r;
     }
    
-    cout << "inode = " << oid << endl;
+    cout << "inode = " << oid << std::endl;
     //remove file inode object 
     return cls_client::remove_inode(_ioctx, oid); 
   }
@@ -762,7 +813,7 @@ namespace lightfs
     //if has cache, read from cache?
  
     //else read from osd
-    cout << "open:" << endl;
+    cout << "open:" << std::endl;
     if (fh == NULL)
       return -1;
     string oid;
@@ -822,10 +873,10 @@ namespace lightfs
 
   int Lightfs::read(Fh *fh, off_t off, off_t len, bufferlist *bl)
   {
-    cout << "Lightfs:: read off = " << off << ", len = " << len << endl;
+    cout << "Lightfs:: read off = " << off << ", len = " << len << std::endl;
     int r = -1;
     if (fh == NULL) {
-      cout << "file hanlder is NULL..." << endl;
+      cout << "file hanlder is NULL..." << std::endl;
       return -1;
     }
     
@@ -837,7 +888,7 @@ namespace lightfs
     std::map<off_t, std::pair<off_t, off_t> > objects;
     file_to_objects(off, len, objects);
     int size = objects.size();
-    cout << "object count = " << objects.size() << endl;
+    cout << "object count = " << objects.size() << std::endl;
     
     librados::AioCompletion **comps = new librados::AioCompletion *[size];
     bufferlist *bls = new bufferlist[size];
@@ -852,7 +903,7 @@ namespace lightfs
     //async read
     std::map<off_t, std::pair<off_t, off_t> >::iterator p = objects.begin();
     for (p = objects.begin(); p != objects.end(); ++p) {
-      //cout << "<" << p->first << ", <" << p->second.first << "," << p->second.second << "> >" << endl;
+      //cout << "<" << p->first << ", <" << p->second.first << "," << p->second.second << "> >" << std::endl;
       bufferlist outbl;
       o_off = p->second.first;
       o_len = p->second.second;
@@ -863,7 +914,7 @@ namespace lightfs
       get_file_oid(fh->ino, p->first, myoid);
       *pc = librados::Rados::aio_create_completion();
       r = _ioctx->aio_read(myoid, *pc, &bls[i], o_len, o_off);
-      cout << "aio_read, r = " << r << endl;
+      cout << "aio_read, r = " << r << std::endl;
       d_off += d_len;
       pc++;
       i++;
@@ -874,11 +925,11 @@ namespace lightfs
     int ret = 0;
     for (i = 0; i < size; i++) {
       ret = comps[i]->get_return_value();
-      cout << "aio read return value = " << ret << endl;
+      cout << "aio read return value = " << ret << std::endl;
       if (ret == 0)
         //wait for aio_read response
         comps[i]->wait_for_complete();
-      //cout << "bls.length = " << bls[i].length() <<"  bls[" << i << "].c_str():" << bls[i].c_str() << endl;
+      //cout << "bls.length = " << bls[i].length() <<"  bls[" << i << "].c_str():" << bls[i].c_str() << std::endl;
       bl->append(bls[i]);
       comps[i]->release();
     }
@@ -892,12 +943,12 @@ namespace lightfs
 
   int Lightfs::write(Fh *fh, off_t off, off_t len, const char *data)
   {
-    cout << "Lightfs::write off = " << off << ", len = " << len << endl;
+    cout << "Lightfs::write off = " << off << ", len = " << len << std::endl;
     int r = -1;
 
     //to fix: off+len > max_file_size
     if (fh == NULL) {
-      cout << "file hanlder is NULL..." << endl;
+      cout << "file hanlder is NULL..." << std::endl;
       return -1;
     }
 
@@ -912,7 +963,7 @@ namespace lightfs
   
     std::map<off_t, std::pair<off_t, off_t> > objects;
     file_to_objects(off, len, objects);
-    cout << "object count = " << objects.size() << endl;
+    cout << "object count = " << objects.size() << std::endl;
 
     off_t d_off = 0; // offset of data, start at 0
     off_t d_len = 0; // len of data piece
@@ -922,7 +973,7 @@ namespace lightfs
     //async write
     std::map<off_t, std::pair<off_t, off_t> >::iterator p = objects.begin();
     for (p = objects.begin(); p != objects.end(); ++p) {
-      //cout << "<" << p->first << ", <" << p->second.first << "," << p->second.second << "> >" << endl;
+      //cout << "<" << p->first << ", <" << p->second.first << "," << p->second.second << "> >" << std::endl;
       bufferlist inbl;
       o_off = p->second.first;
       o_len = p->second.second;
@@ -942,7 +993,7 @@ namespace lightfs
     }
 
     //to fix: transaction->metadata update
-    cout << "will update metadata" << endl;
+    cout << "will update metadata" << std::endl;
     inode_t inode;
     r = getattr(fh->ino, inode);
     inode.mtime = lightfs_now();
@@ -955,7 +1006,7 @@ namespace lightfs
     get_inode_oid(fh->ino, ioid);
     //to fix: sync io -> async io
     r = cls_client::update_inode(_ioctx, ioid, used_attr, inode);  
-    cout << "update_file_inode = " << r << endl;
+    cout << "update_file_inode = " << r << std::endl;
 
     return d_off;
   }
@@ -979,7 +1030,7 @@ namespace lightfs
   int Lightfs::releasedir(dir_buffer *d_buffer)
   {
     if (d_buffer != NULL) {
-      cout << "d_buffer != NULL " << endl;
+      cout << "d_buffer != NULL " << std::endl;
       delete d_buffer;
       d_buffer = NULL;
       return 0;
@@ -1059,13 +1110,13 @@ namespace lightfs
   int Lightfs::ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
                 struct stat *attr)
   {
-    cout << "ll_lookup: parent = " << parent << endl;
+    cout << "ll_lookup: parent = " << parent << std::endl;
     int r = -1;
     inodeno_t ino = -1;
 
     if (parent != ROOT_PARENT) {
       r = lookup(parent, name, ino);
-      cout << "lookup = " << r << endl;
+      cout << "lookup = " << r << std::endl;
       if (r < 0)
         return r;
     } else {
@@ -1142,7 +1193,7 @@ namespace lightfs
     int r = -1;
     inode_t inode;
     r = getattr(ino, inode);
-    cout << "ll_getattr: getattr = " << r << endl;
+    cout << "ll_getattr: getattr = " << r << std::endl;
     if (r < 0)
       return r;
     fill_stat(attr, ino, inode);
@@ -1160,7 +1211,7 @@ namespace lightfs
     r = mknod(parent, name, mode, ino, inode);
 
     if (r < 0) {
-      cout << "ll_mknod: mknod failed, r = " << r << endl;
+      cout << "ll_mknod: mknod failed, r = " << r << std::endl;
       return r;
     }
    
@@ -1178,7 +1229,7 @@ namespace lightfs
       return -1;
     
     if (flags & O_CREAT == 0) {
-      cout << "ll_create: flags is not O_CREAT, failed" << endl;
+      cout << "ll_create: flags is not O_CREAT, failed" << std::endl;
       return -EBADF;
     }    
 
@@ -1190,7 +1241,7 @@ namespace lightfs
 	return -1;
     } else if (r < 0) {
       if (r != -ENOENT) {
-	cout << "ll_create failed, r = " << r << endl;
+	cout << "ll_create failed, r = " << r << std::endl;
         return r;
       } else {
 	//so create file
@@ -1224,15 +1275,15 @@ namespace lightfs
   int Lightfs::ll_open(fuse_req_t req, fuse_ino_t ino, int flags, Fh **fhp)
   {
     int r = -1;
-    cout << "ll_open: fhp == NULL:" << (fhp == NULL) << endl;
+    cout << "ll_open: fhp == NULL:" << (fhp == NULL) << std::endl;
     if (fhp == NULL) {
-      cout << "no file handler pointer..." << endl;
+      cout << "no file handler pointer..." << std::endl;
       return -1;
     }
-    cout << "new fh" << endl;
+    cout << "new fh" << std::endl;
     *fhp = new Fh();
     if (*fhp == NULL) {
-      cout << "new file handler failed..." << endl;
+      cout << "new file handler failed..." << std::endl;
       return -ENOMEM;
     }
     return open(ino, flags, *fhp);
@@ -1269,7 +1320,7 @@ namespace lightfs
   int Lightfs::ll_readdir(fuse_req_t req, fuse_ino_t ino, off_t off, off_t size,
 		off_t *f_size, char *buf, dir_buffer *d_buffer)
   {
-    cout << "ll_readdir" << endl;
+    cout << "ll_readdir" << std::endl;
 
     int r = -1;
     inode_t inode;
@@ -1280,7 +1331,7 @@ namespace lightfs
 
     //to fix: buffer update
     //get all dir entries: <name, ino>
-    cout << "before readdir" << endl;
+    cout << "before readdir" << std::endl;
     if (d_buffer->buffer.size() == 0) {
       r = readdir(ino, d_buffer->buffer);
       if (r < 0)
@@ -1303,7 +1354,7 @@ namespace lightfs
 
     std::map<std::string, inodeno_t>::iterator p = d_buffer->buffer.begin();
     std::map<std::string, inodeno_t>::iterator end = d_buffer->buffer.end();
-    cout << "ll_readdir: off = " << off << ", entry_count = " << entry_count << endl;
+    cout << "ll_readdir: off = " << off << ", entry_count = " << entry_count << std::endl;
     //seek to off
     while(pos--)
       ++p;
@@ -1313,7 +1364,7 @@ namespace lightfs
       entry = p->first.c_str();
       //get the dir entry size
       ent_size = fuse_add_direntry(req, NULL, 0, entry, NULL, 0);
-      //cout << "ent_size = " << ent_size << endl;
+      //cout << "ent_size = " << ent_size << std::endl;
       next_off_size += ent_size;
       if (next_off_size > remind_size)
         break;
@@ -1324,12 +1375,12 @@ namespace lightfs
       //  entry, remind_size, fill_size, cur_off, next_off, ptr);
    
       ent_ino = p->second;
-      cout << "<" << entry << ", " << hex << ent_ino << dec << ">" << endl;
+      cout << "<" << entry << ", " << hex << ent_ino << dec << ">" << std::endl;
       if (ent_ino == ROOT_PARENT) {
 	inode.mode = S_IFDIR;	
       } else { 
         r = getattr(ent_ino, inode);
-        //cout << "getattr = " << r << endl; 
+        //cout << "getattr = " << r << std::endl; 
         if (r < 0)
           return r; 
       }

@@ -18,7 +18,7 @@ bin_DEBUGPROGRAMS += lightfs_test_cls
 
 lightfs_test_logger_SOURCES = lightfs/test_logger.cc
 lightfs_test_logger_LDADD = liblightfs.la
-bin_DEBUGPROGRAMS += lightfs_test_logger
+bin_PROGRAMS += lightfs_test_logger
 
 lightfs_test_fs_SOURCES = \
 	lightfs/test_fs.cc \

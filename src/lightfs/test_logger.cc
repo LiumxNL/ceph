@@ -8,6 +8,7 @@
 #include "common/ceph_context.h"
 
 #include "include/rados/librados.hpp"
+#include "lightfs.hpp"
 
 #define dout_subsys ceph_subsys_client
 
@@ -16,6 +17,25 @@ using namespace librados;
 
 namespace lightfs
 {
+
+
+  void test(IoCtx &ioctx)
+  {
+ //   CephContext * ctx = ioctx.cct();
+  /*  
+      writeback_handler = new ObjecterWriteback(objecter);
+    ObjectCacher cacher(cct, "objecttest", *writeback_handler, client_lock,
+				  client_flush_set_callback,    // all commit callback
+				  (void*)this,
+				  cct->_conf->client_oc_size,
+				  cct->_conf->client_oc_max_objects,
+				  cct->_conf->client_oc_max_dirty,
+				  cct->_conf->client_oc_target_dirty,
+				  cct->_conf->client_oc_max_dirty_age,
+				  true);
+    ObjectCacher::ObjectSet set;
+    */
+  }
 
   class LoggerTest: public Logger
   {
@@ -89,65 +109,8 @@ namespace lightfs
       goto err_shutdown;
     }
     cout << "Begin...." << std::endl;
-    {
-      LoggerTest test(ioctx);
-      LoggerTest test1(ioctx);
-      if (argc == 2 && strcmp(argv[1], "init") == 0) {
-        test.init_pool(2);
-        cout << "Init done." << std::endl;
-        goto err_close;
-      }
-      r = test.open();
-      if (r < 0) {
-        cout << "open Logger test failed ret: " << r << std::endl;
-        goto err_close;
-      }
-      r = test1.open();
-      if (r < 0) {
-        cout << "open Logger test failed ret: " << r << std::endl;
-        goto err_close_test;
-      }
 
-      cout << "DO LOG...." << std::endl;
-      for (int i = 0; i < 100; ++i) {
-        int err = rand() & 0x3;
-        switch(err)
-        {
-          case 1:
-            err = -EBUSY;
-            break;
-          case 2:
-            err = -EINVAL;
-            break;
-          case 3:
-            err = -EAGAIN;
-            break;
-        };
-        {
-          Logger::Transaction trans(test);
-
-          test.log(err, rand() & 0x3, "S0");
-          test.log(err, rand() & 0x3, "S1");
-          test.log(err, rand() & 0x3, "S2");
-          test.log(err, rand() & 0x3, "S3");
-          test.log(err, rand() & 0x3, "S4");
-
-          test.flush();
-        }
-        test.flush();
-        
-        sleep(5);
-      }
-
-      cout << "Wait....." << std::endl;
-
-      getchar();
-
-      cout << "Before ending..." << std::endl;
-      test1.close();
-  err_close_test:
-      test.close();
-    }
+    test(ioctx);
     
   err_close:
     ioctx.close();

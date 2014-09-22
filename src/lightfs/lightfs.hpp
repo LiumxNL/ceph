@@ -13,6 +13,8 @@
 #include "include/rados/librados.hpp"
 #include "include/lightfs_types.hpp"
 #include "include/stat.h"
+#include "osdc/ObjectCacher.h"
+#include "osdc/WritebackHandler.h"
 
 #define ROOT_INO 1
 #define ROOT_PARENT 2
@@ -105,10 +107,32 @@ namespace lightfs
     dir_buffer() : ino(0), buffer() {}
     ~dir_buffer() {}
   };
-  
+
+  class LightfsWriteback: public WritebackHandler
+  {
+  private:
+    librados::IoCtx _ioctx;
+    ceph_tid_t _tid;
+  public:
+    LightfsWriteback(librados::IoCtx &ioctx);
+    virtual void read(const object_t& oid, const object_locator_t& oloc,
+		    uint64_t off, uint64_t len, snapid_t snapid,
+		    bufferlist *pbl, uint64_t trunc_size,  __u32 trunc_seq,
+		    Context *onfinish);
+    virtual bool may_copy_on_write(const object_t& oid, uint64_t read_off, uint64_t read_len, snapid_t snapid);
+    virtual ceph_tid_t write(const object_t& oid, const object_locator_t& oloc,
+			   uint64_t off, uint64_t len, const SnapContext& snapc,
+			   const bufferlist &bl, utime_t mtime,
+			   uint64_t trunc_size, __u32 trunc_seq,
+			   Context *oncommit);
+  };
+
   class Lightfs
   {
   private:
+    LightfsWriteback *writeback_handler;
+    ObjectCacher *objectcacher;
+    Mutex mutex;
     bool has_root;
     long unsigned order; //object size = 1 << order;
   public:
@@ -116,10 +140,8 @@ namespace lightfs
     librados::IoCtx *_ioctx;
     InoGenerator *_ino_gen;
     
-    Lightfs(librados::IoCtx *ctx, InoGenerator *ino_gen, const long unsigned myorder = 22) :
-      has_root(false), order(myorder), _inode_cache(), _ioctx(ctx), _ino_gen(ino_gen)
-    {}
-    ~Lightfs() {}
+    Lightfs(librados::IoCtx *ctx, InoGenerator *ino_gen, const long unsigned myorder = 22);
+    ~Lightfs();
   
     /* helper */
     void file_to_objects(off_t file_off, off_t file_len, std::map<off_t, std::pair<off_t, off_t> > &objects);

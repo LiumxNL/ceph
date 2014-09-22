@@ -27,25 +27,25 @@ namespace lightfs {
 
     r =  rados.init("admin");
     if (r < 0) {
-      cerr << "cannot init rados" << endl;
+      cerr << "cannot init rados" << std::endl;
       return r;
     }
 
     r = rados.conf_read_file("/etc/ceph/ceph.conf");
     if (r < 0) {
-      cerr << "cannot open conf" << endl;
+      cerr << "cannot open conf" << std::endl;
       return r;
     }
 
     r = rados.connect();
     if (r < 0) {
-      cerr << "Cannot connect cluster" << endl;
+      cerr << "Cannot connect cluster" << std::endl;
       return r;
     }
 
     r = rados.ioctx_create("lfs_test", ioctx);
     if (r < 0) {
-      cerr << "Cannot open lfs_test pool" << endl;
+      cerr << "Cannot open lfs_test pool" << std::endl;
       return r;
     }
     return 0;
@@ -62,7 +62,7 @@ namespace lightfs {
     cout << ", " << oct << inode.mode << dec ;
     cout << ", " << inode.uid ;
     cout << ", " << inode.gid ;
-    cout << "]" << endl;
+    cout << "]" << std::endl;
   }
 
   void print_fh(Fh &fh)
@@ -73,6 +73,6 @@ namespace lightfs {
     cout << ", " << fh.pos;
     cout << ", " << fh.mode;
     cout << ", " << fh.flags;
-    cout << "]" << endl;
+    cout << "]" << std::endl;
   }
 }
