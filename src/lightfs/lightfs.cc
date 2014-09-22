@@ -246,13 +246,15 @@ namespace lightfs
     assert(_cache.size() == 1);
   }
 
-  CInode * CRoot::find(inodeno_t ino)
+  CInode * CRoot::get(inodeno_t ino)
   {
     std::map<inodeno_t, CInode *>::iterator pos = _cache.find(ino);
     if (pos == _cache.end())
       return NULL;
-    else
-      return pos->second;
+
+    CInode *result = pos->second;
+    result->get();
+    return result;
   }
 
   void CRoot::trim(int count)

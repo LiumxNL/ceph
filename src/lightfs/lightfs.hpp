@@ -80,7 +80,7 @@ namespace lightfs
     CRoot();
     ~CRoot();
 
-    CInode * find(inodeno_t ino);
+    CInode * get(inodeno_t ino);
     void trim(int count);
   };
 
