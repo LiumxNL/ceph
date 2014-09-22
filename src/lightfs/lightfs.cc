@@ -140,10 +140,12 @@ namespace lightfs
   CInode::~CInode()
   {
     assert(_root);
-    assert(this == _root || _ref == 0);
     assert(_parent == NULL);
 
-    _root->_cache.erase(_ino);
+    if (_root != this) {
+      assert(_ref == 0);
+      _root->_cache.erase(_ino);
+    }
   }
 
   void CInode::get()
