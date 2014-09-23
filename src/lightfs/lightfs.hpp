@@ -97,8 +97,12 @@ namespace lightfs
     int mode;
     
     int flags;
+
+    ObjectCacher::ObjectSet oset;
     
-    Fh() : ino(-1), inode(NULL), pos(0), mode(0), flags(0) {}
+    Fh() : ino(-1), inode(NULL), pos(0), mode(0), flags(0)
+          , oset(this, 0, 0)
+    {}
   };
 
   struct dir_buffer {

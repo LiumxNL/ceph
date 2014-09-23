@@ -757,6 +757,8 @@ namespace lightfs
     fh->pos = 0;
     fh->mode = mode;
     fh->flags = flags;
+    fh->oset.ino = ino;
+    fh->oset.poolid = _ioctx->get_id();
     return 0;
 
   err:
@@ -833,6 +835,8 @@ namespace lightfs
     fh->pos = 0;
     fh->mode = inodep->mode;
     fh->flags = flags;
+    fh->oset.ino = myino;
+    fh->oset.poolid = _ioctx->get_id();
  
     return 0;
   }
