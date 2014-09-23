@@ -116,9 +116,10 @@ namespace lightfs
   {
   private:
     librados::IoCtx _ioctx;
+    Mutex &_mutex;
     ceph_tid_t _tid;
   public:
-    LightfsWriteback(librados::IoCtx &ioctx);
+    LightfsWriteback(librados::IoCtx &ioctx, Mutex &mutex);
     virtual void read(const object_t& oid, const object_locator_t& oloc,
 		    uint64_t off, uint64_t len, snapid_t snapid,
 		    bufferlist *pbl, uint64_t trunc_size,  __u32 trunc_seq,
