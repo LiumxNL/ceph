@@ -313,7 +313,6 @@ namespace lightfs
       : m_ctx(c), m_lock(l) {}
     virtual ~C_Request() {}
     virtual void finish(int r) {
-      assert(!m_lock->is_locked());
       Mutex::Locker l(*m_lock);
       m_ctx->complete(r);
     }
@@ -384,6 +383,7 @@ namespace lightfs
                                     cct->_conf->client_oc_target_dirty,
                                     cct->_conf->client_oc_max_dirty_age,
                                     true);
+    objectcacher->start();
   }
 
   Lightfs::~Lightfs()
