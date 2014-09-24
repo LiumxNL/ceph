@@ -888,6 +888,23 @@ namespace lightfs
       return -1;
     if (fh->inode == NULL)
       return -1;
+    if (fh->new_size > fh->inode->size) {
+      int r;
+      //to fix: transaction->metadata update
+      cout << "will update metadata" << std::endl;
+      inode_t &inode = *fh->inode;
+      r = getattr(fh->ino, inode);
+      inode.mtime = lightfs_now();
+      inode.ctime = inode.mtime;
+      inode.size = inode.size > fh->new_size ? inode.size : fh->new_size;
+      int used_attr = 0;
+      used_attr |= ATTR_MTIME | ATTR_SIZE;
+      string ioid;
+      get_inode_oid(fh->ino, ioid);
+      //to fix: sync io -> async io
+      r = cls_client::update_inode(_ioctx, ioid, used_attr, inode);
+      cout << "update_file_inode = " << r << std::endl;
+    }
     delete fh->inode;
     {
       //This code is just a temporary solution. This should be place at 'fsync'.
@@ -1014,22 +1031,28 @@ namespace lightfs
       return r;
 
     r = len;
-    
-    //to fix: transaction->metadata update
-    cout << "will update metadata" << std::endl;
-    inode_t inode;
-    r = getattr(fh->ino, inode);
-    inode.mtime = lightfs_now();
-    inode.ctime = inode.mtime;
+
     off_t end_pos = off + len;
-    inode.size = inode.size > end_pos ? inode.size : end_pos;
-    int used_attr = 0;
-    used_attr |= ATTR_MTIME | ATTR_SIZE;
-    string ioid;
-    get_inode_oid(fh->ino, ioid);
-    //to fix: sync io -> async io
-    r = cls_client::update_inode(_ioctx, ioid, used_attr, inode);  
-    cout << "update_file_inode = " << r << std::endl;
+    if (end_pos > fh->new_size)
+      fh->new_size = end_pos;
+
+    if (fh->new_size > fh->inode->size &&
+        fh->new_size - fh->inode->size > (16 << 20)) {
+      //to fix: transaction->metadata update
+      cout << "will update metadata" << std::endl;
+      inode_t &inode = *fh->inode;
+      r = getattr(fh->ino, inode);
+      inode.mtime = lightfs_now();
+      inode.ctime = inode.mtime;
+      inode.size = inode.size > fh->new_size ? inode.size : fh->new_size;
+      int used_attr = 0;
+      used_attr |= ATTR_MTIME | ATTR_SIZE;
+      string ioid;
+      get_inode_oid(fh->ino, ioid);
+      //to fix: sync io -> async io
+      r = cls_client::update_inode(_ioctx, ioid, used_attr, inode);
+      cout << "update_file_inode = " << r << std::endl;
+    }
 
     return len;
   }

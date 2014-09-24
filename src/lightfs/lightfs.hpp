@@ -99,9 +99,11 @@ namespace lightfs
     int flags;
 
     ObjectCacher::ObjectSet oset;
+    off_t new_size;
     
     Fh() : ino(-1), inode(NULL), pos(0), mode(0), flags(0)
           , oset(this, 0, 0)
+          , new_size(0)
     {}
   };
 
