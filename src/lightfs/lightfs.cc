@@ -999,6 +999,7 @@ namespace lightfs
 
   int Lightfs::write(Fh *fh, off_t off, off_t len, const char *data)
   {
+    cout << "Lightfs::write off = " << off << ", len = " << len << std::endl;
     int r = -1;
 
     //to fix: off+len > max_file_size
@@ -1028,6 +1029,31 @@ namespace lightfs
 			         mutex);
     if (r < 0)
       return r;
+
+    r = len;
+
+    off_t end_pos = off + len;
+    if (end_pos > fh->new_size)
+      fh->new_size = end_pos;
+
+    if (fh->new_size > fh->inode->size &&
+        fh->new_size - fh->inode->size > (16 << 20)) {
+      //to fix: transaction->metadata update
+      cout << "will update metadata" << std::endl;
+      inode_t &inode = *fh->inode;
+      r = getattr(fh->ino, inode);
+      inode.mtime = lightfs_now();
+      inode.ctime = inode.mtime;
+      inode.size = inode.size > fh->new_size ? inode.size : fh->new_size;
+      int used_attr = 0;
+      used_attr |= ATTR_MTIME | ATTR_SIZE;
+      string ioid;
+      get_inode_oid(fh->ino, ioid);
+      //to fix: sync io -> async io
+      r = cls_client::update_inode(_ioctx, ioid, used_attr, inode);
+      cout << "update_file_inode = " << r << std::endl;
+    }
+
     return len;
   }
 
