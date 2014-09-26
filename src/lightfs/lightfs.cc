@@ -433,7 +433,7 @@ namespace lightfs
     
     //last object
     last_len = end_pos - (last_index + 1) * (1 << order);
-    if (last_len == 0)
+    if (last_len <= 0)
       return;
     last_off = 0;
     objects[last_index] = std::make_pair(last_off, last_len);
@@ -444,7 +444,7 @@ namespace lightfs
     off = 0;
     len = 0;
     std::map<off_t, std::pair<off_t, off_t> >::iterator p = objects.begin();
-    off = p->second.first;
+    off = p->first * (1<<order) + p->second.first;
     for (p = objects.begin(); p != objects.end(); ++p) {
       len += p->second.second;
     }
@@ -493,11 +493,6 @@ namespace lightfs
     gettimeofday(&tv, NULL);
     utime_t t(&tv);
     return t;
-  }
-
-  int Lightfs::path_walk(const char *pathname, char *out_parent, bool out_exit)
-  {
-    return 0;
   }
 
   int Lightfs::write_symlink(inodeno_t ino, string target, inode_t inode)
@@ -635,9 +630,7 @@ namespace lightfs
     if (out_ino)
       *out_ino = ino;
 
-    //cout << "<" << name << ", " << hex << ino << dec << ">" << std::endl;
     r = do_mkdir(pino, name, ino, inode);
-    //cout << "do_mkdir = " << r << std::endl;
     if (r < 0)
       return r;
     return 0;
@@ -692,7 +685,6 @@ namespace lightfs
     
     int r = -1;
     r = cls_client::find_inode(_ioctx, poid, name, ino);
-    //cout << "lookup : r = " << r << std::endl;
     return r;
   }
 
@@ -955,7 +947,7 @@ namespace lightfs
 
   int Lightfs::read(Fh *fh, off_t off, off_t len, bufferlist *bl)
   {
-    cout << "Lightfs:: read off = " << off << ", len = " << len << std::endl;
+    //cout << "Lightfs:: read off = " << off << ", len = " << len << std::endl;
     int r = -1;
     if (fh == NULL) {
       cout << "file hanlder is NULL..." << std::endl;
@@ -1354,7 +1346,7 @@ namespace lightfs
     struct dirent ent;
     struct stat st;
     memset(&ent, 0, sizeof(ent));
-    memset(&ent, 0, sizeof(st));
+    memset(&st, 0, sizeof(st));
 
     //to fix: buffer update
     //get all dir entries: <name, ino>
@@ -1398,16 +1390,13 @@ namespace lightfs
       next_off++;
       if (next_off > entry_count)
         break;
-      //printf("%s, remind_size = %ld, fill_size = %ld,  cur_off = %ld, next_off = %ld, ptr = %p\n", 
-      //  entry, remind_size, fill_size, cur_off, next_off, ptr);
-   
+
       ent_ino = p->second;
-      cout << "<" << entry << ", " << hex << ent_ino << dec << ">" << std::endl;
+      //cout << "<" << entry << ", " << hex << ent_ino << dec << ">" << std::endl;
       if (ent_ino == ROOT_PARENT) {
 	inode.mode = S_IFDIR;	
       } else { 
         r = getattr(ent_ino, inode);
-        //cout << "getattr = " << r << std::endl; 
         if (r < 0)
           return r; 
       }

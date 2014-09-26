@@ -156,7 +156,6 @@ namespace lightfs
     void fill_stat(struct stat *st, inodeno_t ino, inode_t inode, 
 		dev_t rdev = 0, dev_t dev = 0, nlink_t l = 1);
     utime_t lightfs_now();
-    int path_walk(const char *pathname, char *out_parent, bool out_exit);
     int write_symlink(inodeno_t ino, string target, inode_t inode);
     int read_symlink(inodeno_t ino, string &target);
 
