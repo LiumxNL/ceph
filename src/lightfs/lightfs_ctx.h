@@ -34,27 +34,27 @@ namespace lightfs {
       int r = -1;
       r = _rados.init(USER_ID);
       if (r < 0) {
-        cerr << "cannot init rados" << endl;
+        cerr << "cannot init rados" << std::endl;
         return r;
       }
 
       r = _rados.conf_read_file(_conf.c_str());
       if (r < 0) {
-        cerr << "cannot open conf" << endl;
+        cerr << "cannot open conf" << std::endl;
         return r;
       }
 
       r = _rados.connect();
       if (r < 0) {
-        cerr << "Cannot connect cluster" << endl;
+        cerr << "Cannot connect cluster" << std::endl;
         return r;
       }
   
-      cout << "lookup pool = " << _rados.pool_lookup(_pool.c_str()) << endl;
+      cout << "lookup pool = " << _rados.pool_lookup(_pool.c_str()) << std::endl;
 
       r = _rados.ioctx_create(_pool.c_str(), _ioctx);
       if (r < 0) {
-        cerr << "Cannot open pool " << _pool << endl;
+        cerr << "Cannot open pool " << _pool << std::endl;
         return r;
       }
       return 0; 

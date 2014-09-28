@@ -16,7 +16,7 @@ namespace lightfs {
 
   int test_inogen(IoCtx *ioctx)
   {
-    cout << ">>>test_inogen:" << endl;
+    cout << ">>>test_inogen:" << std::endl;
     int bits = 1; 
     InoGenerator inogen(*ioctx);
     if (inogen.open() < 0) {
@@ -31,7 +31,7 @@ namespace lightfs {
       r = inogen.generate(ino);
       if (r < 0)
 	break;
-      cout << hex << ino << dec << endl;
+      cout << hex << ino << dec << std::endl;
     }
     
     return 0;
@@ -41,13 +41,13 @@ namespace lightfs {
   {
     std::map<string, inodeno_t>::iterator p;
     for (p = result.begin(); p != result.end(); ++p) {
-      cout << p->first.substr(2) << endl;
+      cout << p->first.substr(2) << std::endl;
     }
   }
 
   void ls(IoCtx *ioctx, string &oid)
   {
-    cout << "ls " << oid << ":" << endl;
+    cout << "ls " << oid << ":" << std::endl;
     int r = -1;
     std::map<string, inodeno_t> result;
     r = list_inode(ioctx, oid, "", (uint64_t)-1, &result);
@@ -58,16 +58,16 @@ namespace lightfs {
 
   void test_fs(IoCtx *ioctx)
   {
-    cout << ">>>test_fs:" << endl;
+    cout << ">>>test_fs:" << std::endl;
     int bits = 1;
     InoGenerator inogen(*ioctx);
-    cout << "after inogen" << endl;
+    cout << "after inogen" << std::endl;
     if (inogen.open() < 0) {
       inogen.init_pool(bits);
       inogen.open();
     }
    
-    cout << "before create Lightfs " << endl;
+    cout << "before create Lightfs " << std::endl;
     Lightfs fs(ioctx, &inogen);
     /*
     test case : 
@@ -80,7 +80,7 @@ namespace lightfs {
      g1=101 g2=102 
    */
 
-    cout << "before create_root" << endl;
+    cout << "before create_root" << std::endl;
     if (!fs.create_root())
       return;
 
@@ -117,7 +117,7 @@ namespace lightfs {
     PART_LINE("lookup");
     inodeno_t l_ino = -1;
     TEST_EQUAL(fs.lookup(pino, "avatar", l_ino), 0);
-    cout << "avatar.ino = " << hex << l_ino << dec << endl;
+    cout << "avatar.ino = " << hex << l_ino << dec << std::endl;
 
     PART_LINE("rename");
     TEST_EQUAL(fs.rename(pino, "avatar", "AVATAR"), 0);
@@ -128,7 +128,7 @@ namespace lightfs {
     inode_t myinode;
     Fh fh;
     fh.inode = &myinode;
-    cout << "open ino: " << hex << l_ino << dec << endl;
+    cout << "open ino: " << hex << l_ino << dec << std::endl;
     TEST_EQUAL(fs.open(l_ino, flags, &fh), 0);
     print_fh(fh);    
 
@@ -136,7 +136,7 @@ namespace lightfs {
     off_t off = 100;
     off_t len = (1<<22);
     string data_obj(len, 'x');
-    cout << "length = " << data_obj.length() << endl;
+    cout << "length = " << data_obj.length() << std::endl;
     TEST_EQUAL(fs.write(&fh, off, len, data_obj.c_str()), 0);
   }
 
@@ -144,23 +144,23 @@ namespace lightfs {
 
   void test_fuse(IoCtx *ioctx, int argc, char *argv[])
   {
-    cout << ">>>fuse_entry:" << endl;
+    cout << ">>>fuse_entry:" << std::endl;
     int bits = 1;
     InoGenerator inogen(*ioctx);
-    cout << "after inogen" << endl;
+    cout << "after inogen" << std::endl;
     if (inogen.open() < 0) {
       inogen.init_pool(bits);
       inogen.open();
     }
 
-    cout << "before create Lightfs " << endl;
+    cout << "before create Lightfs " << std::endl;
     Lightfs fs(ioctx, &inogen);
 
-    cout << "before create_root" << endl;
+    cout << "before create_root" << std::endl;
     if (!fs.create_root())
       return;
    
-    cout << "before LightfsFuse" << endl;
+    cout << "before LightfsFuse" << std::endl;
     LightfsFuse lfuse(&fs);
     lfuse.init(argc, argv); 
   }

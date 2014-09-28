@@ -29,25 +29,25 @@ namespace lightfs {
 
     r =  rados.init("admin");
     if (r < 0) {
-      cerr << "cannot init rados" << endl;
+      cerr << "cannot init rados" << std::endl;
       return r;
     }
 
     r = rados.conf_read_file("/etc/ceph/ceph.conf");
     if (r < 0) {
-      cerr << "cannot open conf" << endl;
+      cerr << "cannot open conf" << std::endl;
       return r;
     }
 
     r = rados.connect();
     if (r < 0) {
-      cerr << "Cannot connect cluster" << endl;
+      cerr << "Cannot connect cluster" << std::endl;
       return r;
     }
 
     r = rados.ioctx_create("lfs_test", ioctx);
     if (r < 0) {
-      cerr << "Cannot open lfs_test pool" << endl;
+      cerr << "Cannot open lfs_test pool" << std::endl;
       return r;
     }
     return 0;
@@ -56,10 +56,10 @@ namespace lightfs {
 
   int init_inogen(IoCtx &ioctx, string &oid, inodeno_t first)
   {
-    cout << "init_inogen" << endl;
+    cout << "init_inogen" << std::endl;
     int r;
     r = ioctx.stat(oid, NULL, NULL);
-    cout << "ioctx.stat , r = " << r << endl;
+    cout << "ioctx.stat , r = " << r << std::endl;
     if (r == 0)
       return r;  
     ObjectWriteOperation wr_op;
@@ -68,7 +68,7 @@ namespace lightfs {
     wr_op.omap_set_header(inbl);
     r = ioctx.operate(oid, &wr_op);
     if (r < 0) {
-      cerr << "write inogen init data failed" << endl;
+      cerr << "write inogen init data failed" << std::endl;
       return r;
     }
     return 0;
@@ -85,7 +85,7 @@ namespace lightfs {
     cout << ", " << oct << inode.mode << dec ;
     cout << ", " << inode.uid ;
     cout << ", " << inode.gid ;
-    cout << "]" << endl;
+    cout << "]" << std::endl;
   }
 
   int test_cls_client(IoCtx &ioctx)
@@ -180,7 +180,7 @@ namespace lightfs {
     PART_LINE("find_inode");
     inodeno_t myino = -1;
     TEST_EQUAL(find_inode(&ioctx, parent_obj, "child3", myino), 0);
-    cout << "\t  child3->ino = " << myino << endl;
+    cout << "\t  child3->ino = " << myino << std::endl;
     TEST_EQUAL(find_inode(&ioctx, child_obj, "child", myino), 0);
     TEST_EQUAL(find_inode(&ioctx, child2_obj, "child", myino), 0);
     
@@ -189,7 +189,7 @@ namespace lightfs {
     TEST_EQUAL(list_inode(&ioctx, parent_obj, "", 255, &result), 0);
     std::map<std::string, inodeno_t>::iterator ptr = result.begin();
     for (; ptr != result.end(); ++ptr) {
-      cout << "\t  <" << ptr->first << "," << ptr->second << ">" << endl;
+      cout << "\t  <" << ptr->first << "," << ptr->second << ">" << std::endl;
     }  
     TEST_EQUAL(list_inode(&ioctx, child2_obj, "", 255, &result), 0);
 
@@ -202,13 +202,13 @@ int main(int argc, char *argv[])
   Rados rados;
   IoCtx ioctx;
  
-  //cout << "test cls client" << endl;  
+  //cout << "test cls client" << std::endl;  
  
   r = init_cluster(rados, ioctx);
   if (r < 0) 
     goto err;
   
-  //cout << "OK, open" << endl;
+  //cout << "OK, open" << std::endl;
   test_cls_client(ioctx);
 
 err:

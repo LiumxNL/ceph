@@ -17,14 +17,14 @@ void usage()
   stringstream ss; 
   ss << "./notify";
      
-  cout << ss.str() << endl;
+  cout << ss.str() << std::endl;
 }
 
 void watch_callback(uint8_t opcode, uint64_t ver, void *arg)
 {
   cout << "watch_callback ";
   cout << "ver = " << ver << " ";
-  cout << "*arg = " << *(int *)arg << endl;
+  cout << "*arg = " << *(int *)arg << std::endl;
 }
 
 int test_notify(rados_ioctx_t ioctx)
@@ -39,14 +39,14 @@ int test_notify(rados_ioctx_t ioctx)
   
   bufferlist bl, inbl, outbl;
   bl.append(buf);
-  cout << "bl.c_str = " << bl.c_str() << endl;
+  cout << "bl.c_str = " << bl.c_str() << std::endl;
   uint32_t prot_ver = 11;
   uint32_t timeout = 8;
   
   ::encode(prot_ver, inbl);
   ::encode(timeout, inbl);
   ::encode(bl, inbl);
-  cout << "inbl.c_str = " << inbl.c_str() << "inbl.length = " << inbl.length() << endl;
+  cout << "inbl.c_str = " << inbl.c_str() << "inbl.length = " << inbl.length() << std::endl;
 
   r = rados_notify(ioctx, oid, ver, buf, len);
   //r = rados_exec(ioctx, oid, "lightfs", "lightfs_notify", inbl.c_str(), (1 + strlen(inbl.c_str())), NULL, 0);
@@ -56,7 +56,7 @@ int test_notify(rados_ioctx_t ioctx)
   string myoid(oid);
   r = ioctx_class.exec(myoid, "lightfs", "lightfs_notify", inbl, outbl);
 */
-  cout << "rados_notify = " << r << endl;
+  cout << "rados_notify = " << r << std::endl;
   if (r < 0)
     return r;
   return 0;
@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
   */
   r = rados_create(&cluster, userid);
   if ( r < 0) {
-    cout << "rados_create error , r = " << r << endl;
+    cout << "rados_create error , r = " << r << std::endl;
     return r;
   }
   
@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
   */
   r = rados_conf_read_file(cluster, "/etc/ceph/ceph.conf");
   if ( r < 0 ) {
-    cout << "conf read error , r = " << r << endl;
+    cout << "conf read error , r = " << r << std::endl;
     return r;
   }
 
@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
   */
   r = rados_connect(cluster);
   if ( r < 0 ) {
-    cout << "rados connect error , r = " << r << endl;
+    cout << "rados connect error , r = " << r << std::endl;
     return r;
   }
   
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
   */
   r= rados_pool_create(cluster, pool);
   if ( r < 0 ) {
-    cout << "pool create  error , r = " << r << endl;
+    cout << "pool create  error , r = " << r << std::endl;
     return r;
   }
 
@@ -112,11 +112,11 @@ int main(int argc, char *argv[])
   */
   r = rados_ioctx_create(cluster, pool, &ioctx);
   if ( r < 0 ) {
-    cout << "ioctx create  error , r = " << r << endl;
+    cout << "ioctx create  error , r = " << r << std::endl;
     return r;
   }
   
-  //cout << "parepare cluster & ioctx OK !!!" << endl;
+  //cout << "parepare cluster & ioctx OK !!!" << std::endl;
 
   /*
     6. do sth ......

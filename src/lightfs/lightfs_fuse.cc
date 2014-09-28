@@ -19,32 +19,32 @@ namespace lightfs {
 
   static void print_stat(struct stat *st)
   {
-    cout << "[" << endl;
-    cout << "st_dev:" << st->st_dev << endl;
-    cout << "st_ino:" << hex << st->st_ino << dec << endl;
-    cout << "st_mode:" << oct << st->st_mode << dec << endl;
-    cout << "st_nlink:" << st->st_nlink << endl;
-    cout << "st_uid:" << st->st_uid << endl;
-    cout << "st_gid:" << st->st_gid << endl;
-    cout << "st_rdev:" << st->st_rdev << endl;
-    cout << "st_size:" << st->st_size << endl;
-    cout << "st_blksize:" << st->st_blksize << endl;
-    cout << "st_blocks:" << st->st_blocks << endl;
-    cout << "st_atime:" << st->st_atime << endl;
-    cout << "st_mtime:" << st->st_mtime << endl;
-    cout << "st_ctime:" << st->st_ctime << endl;
-    cout << "]" << endl;
+    cout << "[" << std::endl;
+    cout << "st_dev:" << st->st_dev << std::endl;
+    cout << "st_ino:" << hex << st->st_ino << dec << std::endl;
+    cout << "st_mode:" << oct << st->st_mode << dec << std::endl;
+    cout << "st_nlink:" << st->st_nlink << std::endl;
+    cout << "st_uid:" << st->st_uid << std::endl;
+    cout << "st_gid:" << st->st_gid << std::endl;
+    cout << "st_rdev:" << st->st_rdev << std::endl;
+    cout << "st_size:" << st->st_size << std::endl;
+    cout << "st_blksize:" << st->st_blksize << std::endl;
+    cout << "st_blocks:" << st->st_blocks << std::endl;
+    cout << "st_atime:" << st->st_atime << std::endl;
+    cout << "st_mtime:" << st->st_mtime << std::endl;
+    cout << "st_ctime:" << st->st_ctime << std::endl;
+    cout << "]" << std::endl;
   }
 
   static void print_fh(Fh *fh)
   {
-    cout << "[" << endl;
-    cout << "ino:" << hex << fh->ino << dec << endl;
-    cout << "*inode:" << hex << fh->inode << dec << endl;
-    cout << "pos:" << fh->pos << endl;
-    cout << "mode:" << oct << fh->mode << dec << endl;
-    cout << "flags:" << oct << fh->flags << dec << endl;
-    cout << "]" << endl;
+    cout << "[" << std::endl;
+    cout << "ino:" << hex << fh->ino << dec << std::endl;
+    cout << "*inode:" << hex << fh->inode << dec << std::endl;
+    cout << "pos:" << fh->pos << std::endl;
+    cout << "mode:" << oct << fh->mode << dec << std::endl;
+    cout << "flags:" << oct << fh->flags << dec << std::endl;
+    cout << "]" << std::endl;
   }
   
   static void fuse_ll_init(void *userdata, struct fuse_conn_info* conn)
@@ -97,13 +97,13 @@ namespace lightfs {
     char *buf = new char[size];
 
     off_t fill_size = 0;
-    cout << "fuse_ll_readdir: off = " << off << endl;
+    cout << "fuse_ll_readdir: off = " << off << std::endl;
 
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req); 
     dir_buffer *d_buffer = (dir_buffer *)fi->fh;
     
     r = lfuse->lfs->ll_readdir(req, ino, off, size, &fill_size, buf, d_buffer);       
-    cout << "fuse_ll_readdir: fill_size = " << fill_size << endl;
+    cout << "fuse_ll_readdir: fill_size = " << fill_size << std::endl;
 
     if (r == 0) {
       fuse_reply_buf(req, buf, fill_size);
@@ -144,13 +144,13 @@ namespace lightfs {
       return;
     }
     //parent: pino of name (symlink) 
-    cout << "symlink: " << link << ", parent:" << hex << parent << dec << " name:" << name << endl;
+    cout << "symlink: " << link << ", parent:" << hex << parent << dec << " name:" << name << std::endl;
     int r = -1;
     fuse_entry_param e;
     memset(&e, 0, sizeof(e));
     
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
-    cout << "symlink: mountpoint = " << lfuse->mountpoint << endl;
+    cout << "symlink: mountpoint = " << lfuse->mountpoint << std::endl;
     r = lfuse->lfs->ll_symlink(req, link, parent, name, &e.attr);
     if (r == 0) {
       e.ino = e.attr.st_ino;
@@ -166,10 +166,10 @@ namespace lightfs {
     struct fuse_entry_param e;
     memset(&e, 0, sizeof(e));
  
-    cout << "fuse_ll_lookup: parent = " << hex << parent << dec << " name = " << name << endl;
+    cout << "fuse_ll_lookup: parent = " << hex << parent << dec << " name = " << name << std::endl;
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
     r = lfuse->lfs->ll_lookup(req, parent, name, &e.attr);
-    cout << "fuse_ll_lookup , ll_lookup = " << r << endl;
+    cout << "fuse_ll_lookup , ll_lookup = " << r << std::endl;
     if (r == 0) {
       e.ino = e.attr.st_ino;
       fuse_reply_entry(req, &e);
@@ -186,7 +186,7 @@ namespace lightfs {
       return;
     }
     cout << "fuse_ll_rename:" << name << " -> " << newname << " parent:" 
-	<< hex << parent << " newparent: " << newparent  << dec << endl;
+	<< hex << parent << " newparent: " << newparent  << dec << std::endl;
     int r = -1;
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
     r = lfuse->lfs->ll_rename(req, parent, name, newparent, newname);
@@ -197,7 +197,7 @@ namespace lightfs {
 			int to_set, struct fuse_file_info *fi)
   {
     cout << "fuse_ll_setattr: ino = " << hex << ino << dec
-         << " fi = " << hex << fi << dec << endl;
+         << " fi = " << hex << fi << dec << std::endl;
     int r = -1;
     Fh *fh = NULL;
     if (fi) 
@@ -216,7 +216,7 @@ namespace lightfs {
 			struct fuse_file_info *fi)
   {
     int r = 0;
-    cout << "fuse_ll_getattr, ino = " << hex << ino << dec << endl;
+    cout << "fuse_ll_getattr, ino = " << hex << ino << dec << std::endl;
     struct stat attr;
     memset(&attr, 0, sizeof(attr));
 
@@ -303,7 +303,7 @@ namespace lightfs {
     void *fh = NULL;
     LightfsFuse *lfuse = (LightfsFuse *)fuse_req_userdata(req);
     r = lfuse->lfs->ll_open(req, ino, fi->flags, (Fh **)&fh);
-    cout << "ll_open: r = " << r << endl;
+    cout << "ll_open: r = " << r << std::endl;
     if (r == 0) {
       fi->fh = (long)fh;
       fuse_reply_open(req, fi);
