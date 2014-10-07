@@ -108,15 +108,23 @@ namespace lightfs {
       return 0;
     }
 
-    int update_inode(librados::IoCtx *ioctx, const std::string &oid, 
+    void update_inode(librados::ObjectWriteOperation *rados_op,
         int used_attr, const inode_t &inode)
     {
       bufferlist inbl;
-      bufferlist outbl;
 
       ::encode(used_attr, inbl);
       inode.encode(used_attr, inbl);
-      return ioctx->exec(oid, "lightfs", "update_inode", inbl, outbl);
+
+      rados_op->exec("lightfs", "update_inode", inbl);
+    }
+
+    int update_inode(librados::IoCtx *ioctx, const std::string &oid,
+        int used_attr, const inode_t &inode)
+    {
+      librados::ObjectWriteOperation op;
+      update_inode(&op, used_attr, inode);
+      return ioctx->operate(oid, &op);
     }
 
     int link_inode(librados::IoCtx *ioctx, const std::string &oid,

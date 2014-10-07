@@ -30,6 +30,8 @@ namespace lightfs {
 
     int get_inode(librados::IoCtx *ioctx, const std::string &oid,
         inode_t &inode, int used_attr = ATTR_ALL);
+    void update_inode(librados::ObjectWriteOperation *rados_op,
+        int used_attr, const inode_t &inode);
     int update_inode(librados::IoCtx *ioctx, const std::string &oid,
         int used_attr, const inode_t &inode);
 
