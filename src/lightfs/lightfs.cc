@@ -10,6 +10,14 @@ using namespace std;
 
 namespace lightfs
 {
+
+  void aio_safe_callback(librados::completion_t comp, void *arg)
+  {
+    librados::AioCompletion *aio_comp = (librados::AioCompletion *)arg;
+    if (aio_comp)
+      aio_comp->release();
+  }
+
   InoGenerator::InoGenerator(const IoCtx &ioctx)
     :_mutex("InoGenerator")
     ,_bits(0)
@@ -278,7 +286,7 @@ namespace lightfs
     if (ino < 1) { 
       return;
     }
-    snprintf(oid_str, sizeof(oid_str), "inode.%016lX", ino);
+    snprintf(oid_str, sizeof(oid_str), "inode.%016lx", ino);
     oid = oid_str;
   }
 
@@ -287,7 +295,7 @@ namespace lightfs
     char oid_str[32] = {'\0'};
     if (ino == 0)
       return;
-    snprintf(oid_str, sizeof(oid_str), "data.%016lX.%08lX", ino, index);
+    snprintf(oid_str, sizeof(oid_str), "%016lx.%08lx", ino, index);
     oid = oid_str;    
   }
 
@@ -1026,6 +1034,24 @@ namespace lightfs
     off_t end_pos = off + len;
     if (end_pos > fh->new_size)
       fh->new_size = end_pos;
+
+    //update inode size aysnc every 128MB increment
+    if (fh->inode->size + (1<<27) <= fh->new_size) {
+      fh->inode->size = fh->new_size;
+      string oid;
+      get_inode_oid(fh->ino, oid);
+      inode_t inode;
+      inode.size = fh->new_size;
+      inode.mtime = lightfs_now();
+      librados::ObjectWriteOperation op;
+      cls_client::update_inode(_ioctx, oid, ATTR_SIZE|ATTR_MTIME, inode);
+
+      librados::AioCompletion *comp = librados::Rados::aio_create_completion();
+      comp->set_safe_callback(comp, aio_safe_callback);
+      r = _ioctx->aio_operate(oid, comp, &op);
+      if (r < 0)
+        comp->release();
+    }
 
     return len;
   }
