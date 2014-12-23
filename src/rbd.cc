@@ -105,6 +105,8 @@ void usage()
 "                                              path, or \"-\" for stdout\n"
 "  import-diff <path> <image-name>             import an incremental diff from\n"
 "                                              path or \"-\" for stdin\n"
+"  merge-diff <diff1> <diff2> <path>           merge <diff1> and <diff2> into\n"
+"                                              <path> or \"-\" for stdin\n"
 "  (cp | copy) <src> <dest>                    copy src image to dest\n"
 "  (mv | rename) <src> <dest>                  rename src image to dest\n"
 "  snap ls <image-name>                        dump list of image snapshots\n"
@@ -1708,6 +1710,322 @@ static int do_import_diff(librbd::Image &image, const char *path)
   return r;
 }
 
+//lmx_merge_diff
+typedef struct {
+      __u8 tag;
+      string ssnap;
+      string lsnap;
+      uint64_t size;
+      uint64_t begin;
+      uint64_t end;
+      uint64_t len;
+}unit;
+
+int extract(int fd,unit *ut){
+      int r =0;
+      __u8 tag;
+      r = safe_read_exact(fd, &tag, 1);
+if(r < 0) cout << "e1" << std::endl;
+      if(r < 0)
+        return r;
+      ut->tag = tag;
+      if(tag == 'e') return 0;
+      else if(tag == 'f') {
+        r = read_string(fd, 4096, &ut->ssnap);	// 4k limit to make sure we don't get a garbage string
+      }
+      else if(tag == 't') {
+        r = read_string(fd, 4096, &ut->lsnap);
+      }
+      else if(tag == 's') {
+      char buf[8];
+      r = safe_read_exact(fd, buf, 8);
+        if(r <0)
+        return r;
+      bufferlist bl;
+      bl.append(buf, 8);
+      bufferlist::iterator p = bl.begin();
+      ::decode(ut->size, p);
+      }
+      else if(tag == 'w' || tag == 'z') {
+        char buf[16];
+        r = safe_read_exact(fd, buf, 16);
+          if(r < 0)
+	  return r;
+        bufferlist bl;
+        bl.append(buf,16);
+        bufferlist::iterator p = bl.begin();
+        ::decode(ut->begin, p);
+        ::decode(ut->len, p);
+        ut->end = ut->begin + ut->len;
+      }
+      else{
+      cerr << "unrecognized tag byte" << (int)tag << " in stream; aborting" << std::endl;
+      return -EINVAL;
+      }
+      return r;
+}
+
+int accept(int fd, int ph, uint64_t ofs, uint64_t end, __u8 tag){
+      int r;
+      bufferlist data;
+      ::encode(tag, data);
+      ::encode(ofs, data);
+      uint64_t len = (end - ofs);
+      ::encode(len, data);
+      if(tag == 'w'){
+        bufferptr bp = buffer::create(len);
+        r = safe_read_exact(fd, bp.c_str(), len);
+          if(r < 0)
+	  return r;
+        data.append(bp);
+      }
+      r = data.write_fd(ph);
+        if(r < 0)
+	return r;
+      return 0;
+}
+int slide(int fd, uint64_t len){
+      off_t r = lseek(fd, len, SEEK_CUR);
+        if(r < 0)
+        return r;
+      return 0;
+}
+
+static int do_merge_diff(const char *first, const char *second, const char *path){
+      int ft,sd,ph,fd,r;
+      struct stat stat_buf;
+      MyProgressContext pc("Merging image diff");
+      string from, to;
+      unit fut,sut;
+      uint64_t size = 0;
+      uint64_t finish = 0;
+      int resizeflag = 0;
+
+      ft = open(first, O_RDONLY);
+      sd = open(second, O_RDONLY);
+      ph = open(path, O_WRONLY | O_CREAT | O_EXCL, 0644);
+      if(ft < 0) {cerr << "rbd: error opening" << first << std::endl;r=-1;goto done;};
+      if(sd < 0) {cerr << "rbd: error opening" << second << std::endl;r=-1;goto done;};
+      if(ph < 0) {cerr << "rbd: error opening" << path << std::endl;r=-1;goto done;};
+
+      fd = ft;
+  read_label:
+      r = ::fstat(fd, &stat_buf);
+      if (r< 0)
+      	goto done;
+      size += (uint64_t)stat_buf.st_size;
+      char buf[strlen(RBD_DIFF_BANNER) + 1];
+      r = safe_read_exact(fd,buf,strlen(RBD_DIFF_BANNER));
+      if(r < 0)
+      	goto done;
+      buf[strlen(RBD_DIFF_BANNER)] = '\0';
+      if (strcmp(buf, RBD_DIFF_BANNER)) {
+      	cerr << "invalid banner '" << buf << "', expected '" << RBD_DIFF_BANNER << "'" << std::endl;
+	r = -EINVAL;
+	goto done;
+      }      
+      if(fd == ft){
+        fd = sd;
+	goto read_label;
+      }
+
+   {  //proceed file_header
+      bufferlist bl;
+      bl.append(RBD_DIFF_BANNER, strlen(RBD_DIFF_BANNER));
+
+      while(true){
+        r = extract(ft, &fut);
+	  if(r < 0) goto done;
+	if(fut.tag == 'f')
+        {
+	    ::encode(fut.tag, bl);
+	    ::encode(fut.ssnap, bl);
+	}
+	else if(fut.tag == 't'){
+	  r = extract(sd, &sut);
+	  if(sut.tag == 'f'){
+	    if(sut.ssnap != fut.lsnap){
+	      cerr << "first_diff's last_snap need match second_diff's start_snap" << std::endl;
+	      r = -EINVAL;
+	      goto done;
+	    }
+	    else{
+	      r = extract(sd, &sut);
+	      if(sut.tag == 't'){
+	        ::encode(sut.tag, bl);
+		::encode(sut.lsnap, bl);
+	      }
+	      break;
+	    }
+	  }
+	  else{
+	    cerr << "require second_diff's start_snap" << std::endl;
+	    r = -EINVAL;
+	    goto done;
+	  }
+	}
+	else{
+	  cerr << "require first_diff's last_snap" << std::endl;
+	  r = -EINVAL;
+	  goto done;
+        }
+      }
+
+      r = extract(ft, &fut);
+        if(r < 0) goto done;
+      if(fut.tag == 's'){
+        if(sut.tag != 's'){	//previous operation may pre_read this unit to determine termination.
+	  r = extract(sd, &sut);
+	    if(r < 0) goto done;
+	}
+	if(sut.tag == 's'){
+	  ::encode(sut.tag, bl);
+	  ::encode(sut.size, bl);
+	}
+	else{
+	  cerr << "second_diff lose size" << std::endl;
+	  r = -EINVAL;
+	  goto done;
+	}
+      }
+      else{
+        cerr << "fist_diff lose size" << std::endl;
+	r = -EINVAL;
+	goto done;
+      }
+
+      if(fut.size < sut.size)	//mark size shrink;
+        resizeflag = 1;
+      r = bl.write_fd(ph);
+      if (r <0) goto done;
+   }//proceed file_header end;
+
+   {//data
+      r = extract(ft, &fut);
+        if(r < 0) goto done;
+      r = extract(sd, &sut);
+        if(r < 0) goto done;
+      while(true){
+	if(sut.tag == 'e' || fut.tag == 'e'){
+	  if(fut.tag == 'e' && resizeflag == 1){	//treak size shrink as 'z' operation.
+	    fut.tag = 'z';
+	    fut.begin = fut.size;
+	    fut.end = sut.size;
+	    fut.len = sut.size - fut.size;
+	    resizeflag = 2;
+	  }
+	  else break;
+	}
+	else if((sut.tag == 'w' || sut.tag == 'z') && (fut.tag == 'w' || fut.tag == 'z')){
+	  if(fut.end <= sut.begin){
+	    accept(ft, ph, fut.begin, fut.end, fut.tag);
+	    if(resizeflag == 2) break;
+	    r = extract(ft, &fut);
+	      if(r< 0) goto done;
+	  }
+	  else if(fut.begin < sut.begin){
+	    accept(ft, ph, fut.begin, sut.begin, fut.tag);
+	    if((fut.end <= sut.end)){
+              if(fut.tag == 'w')	//when tag is 'z' skip this operation.
+	      slide(ft, (fut.end - sut.begin));
+	      if(resizeflag == 2) break;
+	      r = extract(ft, &fut);
+	        if(r < 0) goto done;
+	    }
+            else{
+	      accept(sd, ph, sut.begin, sut.end, sut.tag);
+              if(fut.tag == 'w')
+	      slide(ft, sut.len);
+	      fut.begin = sut.end;
+	      r = extract(sd, &sut);
+	        if(r < 0) goto done;
+	    }
+	  }
+	  else if(fut.begin >= sut.begin && fut.begin < sut.end){
+	    if((fut.end <= sut.end)){
+	      if(resizeflag == 2) break;
+	      while((fut.tag == 'w' || fut.tag == 'z') && fut.end <= sut.end){
+              if(fut.tag == 'w')
+	      slide(ft, fut.len);
+	      r = extract(ft, &fut);
+	        if(r < 0) goto done;
+	      }
+	      if(fut.begin <sut.end){
+                if(fut.tag == 'w')
+	        slide(ft, (sut.end - fut.begin));
+		fut.begin = sut.end;
+              }
+	    }
+	    else{
+              if(fut.tag == 'w')
+	      slide(ft, (sut.end - fut.begin));
+	      fut.begin = sut.end;
+	    }
+	    accept(sd, ph, sut.begin, sut.end, sut.tag);
+	    r = extract(sd, &sut);
+	      if(r < 0) goto done;
+	  }
+	  else if(fut.begin >=sut.end){
+	    accept(sd, ph, sut.begin, sut.end, sut.tag);
+	    r = extract(sd, &sut);
+	      if(r < 0) goto done;
+	  }
+	}
+        else{
+	  cerr << "unrecognized tag:" << "(" << fut.tag << "," << sut.tag << ")" << std::endl;
+	  r = -EINVAL;
+	  goto done;
+	}
+      finish = (lseek64(ft, 0, SEEK_CUR) + lseek64(sd, 0, SEEK_CUR));
+      pc.update_progress(finish, size);
+      }
+
+      //copy the rest part
+      if(fut.tag == 'e' || resizeflag == 2){
+        while((sut.tag != 'e') && (sut.begin < sut.size)){
+	  if(sut.end > sut.size) sut.end = sut.size;
+	  accept(sd, ph, sut.begin, sut.end, sut.tag);
+	    r = extract(sd, &sut);
+	      if(r < 0) goto done;
+          finish = (lseek64(ft, 0, SEEK_CUR) + lseek64(sd, 0, SEEK_CUR));
+          pc.update_progress(finish, size);
+	}
+      }
+      else if(sut.tag == 'e'){
+        while((fut.tag != 'e') && (fut.begin < sut.size) && (resizeflag != 2)){
+	  if(fut.end > sut.size) fut.end = sut.size;
+	  accept(ft, ph, fut.begin, fut.end, fut.tag);
+	    r = extract(ft, &fut);
+	      if(r < 0) goto done;
+          finish = (lseek64(ft, 0, SEEK_CUR) + lseek64(sd, 0, SEEK_CUR));
+          pc.update_progress(finish, size);
+	}
+	if(fut.tag == 'e' && resizeflag == 1)
+	accept(ft, ph, fut.size, sut.size, 'z');
+        if(resizeflag == 2)
+        accept(ft, ph, fut.begin, fut.end, fut.tag);
+      }//copy rest end
+   }//data
+   {//tail
+      __u8 tag = 'e';
+      bufferlist bl;
+      ::encode(tag, bl);
+      r = bl.write_fd(ph);
+   }
+
+
+  done:
+      close(ft);
+      close(sd);
+      close(ph);
+      if(r < 0)
+	pc.fail();
+      else
+        pc.finish();
+      return r;
+}
+//lmx_merge_diff end
+
 static int do_copy(librbd::Image &src, librados::IoCtx& dest_pp,
 		   const char *destname)
 {
@@ -1965,6 +2283,7 @@ enum {
   OPT_LOCK_ADD,
   OPT_LOCK_REMOVE,
   OPT_BENCH_WRITE,
+  OPT_MERGE_DIFF,
 };
 
 static int get_cmd(const char *cmd, bool snapcmd, bool lockcmd)
@@ -1991,6 +2310,8 @@ static int get_cmd(const char *cmd, bool snapcmd, bool lockcmd)
       return OPT_EXPORT;
     if (strcmp(cmd, "export-diff") == 0)
       return OPT_EXPORT_DIFF;
+    if (strcmp(cmd, "merge-diff") == 0)
+      return OPT_MERGE_DIFF;
     if (strcmp(cmd, "diff") == 0)
       return OPT_DIFF;
     if (strcmp(cmd, "import") == 0)
@@ -2094,7 +2415,8 @@ int main(int argc, const char **argv)
     *dest_poolname = NULL, *dest_snapname = NULL, *path = NULL,
     *devpath = NULL, *lock_cookie = NULL, *lock_client = NULL,
     *lock_tag = NULL, *output_format = "plain",
-    *fromsnapname = NULL;
+    *fromsnapname = NULL,
+    *first_diff = NULL, *second_diff = NULL;
   bool lflag = false;
   int pretty_format = 0;
   long long stripe_unit = 0, stripe_count = 0;
@@ -2281,6 +2603,9 @@ if (!set_conf_param(v, p1, p2, p3)) { \
       case OPT_EXPORT_DIFF:
 	SET_CONF_PARAM(v, &imgname, &path, NULL);
 	break;
+      case OPT_MERGE_DIFF:
+        SET_CONF_PARAM(v, &first_diff, &second_diff, &path);
+        break;
       case OPT_IMPORT:
       case OPT_IMPORT_DIFF:
 	SET_CONF_PARAM(v, &path, &imgname, NULL);
@@ -2385,7 +2710,8 @@ if (!set_conf_param(v, p1, p2, p3)) { \
       opt_cmd != OPT_IMPORT &&
       opt_cmd != OPT_IMPORT_DIFF &&
       opt_cmd != OPT_UNMAP &&
-      opt_cmd != OPT_SHOWMAPPED && !imgname) {
+      opt_cmd != OPT_SHOWMAPPED &&
+      opt_cmd != OPT_MERGE_DIFF && !imgname) {
     cerr << "rbd: image name was not specified" << std::endl;
     return EXIT_FAILURE;
   }
@@ -2784,6 +3110,18 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     r = do_export_diff(image, fromsnapname, snapname, path);
     if (r < 0) {
       cerr << "rbd: export-diff error: " << cpp_strerror(-r) << std::endl;
+      return -r;
+    }
+    break;
+
+  case OPT_MERGE_DIFF:
+    if(!path){
+      cerr << "rbd: merge-diff requires pathname" << std::endl;
+      return EINVAL;
+    }
+    r = do_merge_diff(first_diff, second_diff, path);
+    if (r < 0){
+      cerr << "rbd: merge-diff error" << std::endl;
       return -r;
     }
     break;
