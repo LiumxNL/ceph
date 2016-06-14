@@ -236,6 +236,9 @@ TEST_F(TestJournalReplay, AioWriteEvent) {
   aio_comp->release();
 }
 
+TEST_F(TestJournalReplay, AioWriteSameEvent) {
+}
+
 TEST_F(TestJournalReplay, AioFlushEvent) {
   REQUIRE_FEATURE(RBD_FEATURE_JOURNALING);
 

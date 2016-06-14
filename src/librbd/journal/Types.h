@@ -35,7 +35,8 @@ enum EventType {
   EVENT_TYPE_RENAME         = 10,
   EVENT_TYPE_RESIZE         = 11,
   EVENT_TYPE_FLATTEN        = 12,
-  EVENT_TYPE_DEMOTE         = 13
+  EVENT_TYPE_DEMOTE         = 13,
+  EVENT_TYPE_AIO_WRITESAME  = 14
 };
 
 struct AioDiscardEvent {
@@ -65,6 +66,24 @@ struct AioWriteEvent {
   AioWriteEvent() : offset(0), length(0) {
   }
   AioWriteEvent(uint64_t _offset, size_t _length, const bufferlist &_data)
+    : offset(_offset), length(_length), data(_data) {
+  }
+
+  void encode(bufferlist& bl) const;
+  void decode(__u8 version, bufferlist::iterator& it);
+  void dump(Formatter *f) const;
+};
+
+struct AioWriteSameEvent {
+  static const EventType TYPE = EVENT_TYPE_AIO_WRITESAME;
+
+  uint64_t offset;
+  size_t length;
+  bufferlist data;
+
+  AioWriteSameEvent() : offset(0), length(0) {
+  }
+  AioWriteSameEvent(uint64_t _offset, size_t _length, const bufferlist &_data)
     : offset(_offset), length(_length), data(_data) {
   }
 

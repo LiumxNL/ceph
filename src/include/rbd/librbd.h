@@ -556,6 +556,12 @@ CEPH_RBD_API int rbd_aio_write(rbd_image_t image, uint64_t off, size_t len,
  */
 CEPH_RBD_API int rbd_aio_write2(rbd_image_t image, uint64_t off, size_t len,
                                 const char *buf, rbd_completion_t c, int op_flags);
+
+CEPH_RBD_API int rbd_wriesame(rbd_image_t image, uint64_t off, size_t write_len,
+                              const char *buf, size_t data_len);
+CEPH_RBD_API int rbd_aio_writesame(rbd_image_t image, uint64_t off, size_t write_len,
+                                   const char *buf, size_t data_len, rbd_completion_t c);
+
 CEPH_RBD_API int rbd_aio_read(rbd_image_t image, uint64_t off, size_t len,
                               char *buf, rbd_completion_t c);
 /*

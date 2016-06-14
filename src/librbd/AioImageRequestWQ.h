@@ -30,6 +30,8 @@ public:
                 bufferlist *pbl, int op_flags, bool native_async=true);
   void aio_write(AioCompletion *c, uint64_t off, uint64_t len, const char *buf,
                  int op_flags, bool native_async=true);
+  void aio_writesame(AioCompletion *c, uint64_t off, uint64_t len, const char *buf,
+                     uint64_t data_len, int op_flags, bool native_async=true);
   void aio_discard(AioCompletion *c, uint64_t off, uint64_t len,
                    bool native_async=true);
   void aio_flush(AioCompletion *c, bool native_async=true);
